@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+.gradle-home/
+**/build/
+
+# Minecraft run directories
+run/
+**/run/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Local test project and generated test artifacts
+test-mod/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db

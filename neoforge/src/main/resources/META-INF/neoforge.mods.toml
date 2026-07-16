@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="mc_client_update"
+version="${version}"
+displayName="MC Client Update"
+authors="Henry"
+description='''
+Updates server-managed client mods before Minecraft finishes starting.
+'''
+
+[[dependencies.mc_client_update]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.mc_client_update]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="CLIENT"
+
+[features.mc_client_update]
+javaVersion="[21,)"

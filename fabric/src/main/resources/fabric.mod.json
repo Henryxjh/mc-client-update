@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "mc_client_update",
+  "version": "${version}",
+  "name": "MC Client Update",
+  "description": "Updates server-managed client mods before Minecraft finishes starting.",
+  "authors": ["Henry"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "com.henrymc.clientupdate.fabric.FabricClientUpdate"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  }
+}
