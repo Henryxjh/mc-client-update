@@ -1,4 +1,4 @@
-package com.henrymc.clientupdate;
+package io.github.henryxjh.mcclientupdate;
 
 import java.nio.file.Path;
 

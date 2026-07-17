@@ -1,13 +1,16 @@
-package com.henrymc.clientupdate.fabric;
+package io.github.henryxjh.mcclientupdate.fabric;
 
-import com.henrymc.clientupdate.ClientUpdateBootstrap;
-import com.henrymc.clientupdate.PlatformContext;
+import com.mojang.logging.LogUtils;
+import io.github.henryxjh.mcclientupdate.ClientUpdateBootstrap;
+import io.github.henryxjh.mcclientupdate.PlatformContext;
 import java.nio.file.Path;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import org.slf4j.Logger;
 
 public final class FabricClientUpdate implements ModInitializer {
     private static final String MOD_ID = "mc_client_update";
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     @Override
     public void onInitialize() {
@@ -36,7 +39,7 @@ public final class FabricClientUpdate implements ModInitializer {
 
             @Override
             public void log(String message) {
-                System.out.println("[MCClientUpdate] " + message);
+                LOGGER.info("[MCClientUpdate] {}", message);
             }
         });
     }

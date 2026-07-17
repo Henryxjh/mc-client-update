@@ -1,4 +1,4 @@
-package com.henrymc.clientupdate;
+package io.github.henryxjh.mcclientupdate;
 
 /** Thrown on the loader startup thread after a verified update was installed. */
 public final class RestartRequiredException extends RuntimeException {

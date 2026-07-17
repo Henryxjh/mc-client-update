@@ -1,4 +1,4 @@
-package com.henrymc.clientupdate.update;
+package io.github.henryxjh.mcclientupdate.update;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;

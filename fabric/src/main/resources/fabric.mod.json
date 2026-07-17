@@ -9,7 +9,7 @@
   "environment": "client",
   "entrypoints": {
     "main": [
-      "com.henrymc.clientupdate.fabric.FabricClientUpdate"
+      "io.github.henryxjh.mcclientupdate.fabric.FabricClientUpdate"
     ]
   },
   "depends": {

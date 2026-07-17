@@ -1,14 +1,18 @@
-package com.henrymc.clientupdate.neoforge;
+package io.github.henryxjh.mcclientupdate.neoforge;
 
-import com.henrymc.clientupdate.ClientUpdateBootstrap;
-import com.henrymc.clientupdate.PlatformContext;
+import com.mojang.logging.LogUtils;
+import io.github.henryxjh.mcclientupdate.ClientUpdateBootstrap;
+import io.github.henryxjh.mcclientupdate.PlatformContext;
 import java.nio.file.Path;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLPaths;
+import org.slf4j.Logger;
 
 @Mod("mc_client_update")
 public final class NeoForgeClientUpdate {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     public NeoForgeClientUpdate() {
         Path selfPath = ModList.get()
                 .getModFileById("mc_client_update")
@@ -33,7 +37,7 @@ public final class NeoForgeClientUpdate {
 
             @Override
             public void log(String message) {
-                System.out.println("[MCClientUpdate] " + message);
+                LOGGER.info("[MCClientUpdate] {}", message);
             }
         });
     }
