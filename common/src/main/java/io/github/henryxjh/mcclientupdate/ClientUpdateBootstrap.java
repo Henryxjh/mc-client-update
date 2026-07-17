@@ -1,6 +1,13 @@
 package io.github.henryxjh.mcclientupdate;
 
 import io.github.henryxjh.mcclientupdate.config.ClientUpdateConfig;
+import io.github.henryxjh.mcclientupdate.download.ArtifactDownloader;
+import io.github.henryxjh.mcclientupdate.download.DownloadBatchResult;
+import io.github.henryxjh.mcclientupdate.download.DownloadedArtifact;
+import io.github.henryxjh.mcclientupdate.download.DownloadException;
+import io.github.henryxjh.mcclientupdate.download.DownloadFailure;
+import io.github.henryxjh.mcclientupdate.download.DownloadReportWriter;
+import io.github.henryxjh.mcclientupdate.download.ManualUpdate;
 import io.github.henryxjh.mcclientupdate.manifest.ClientUpdateManifestFetcher;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.ManifestFetchException;
@@ -11,12 +18,14 @@ import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.scan.ModUpdateScanner;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
+
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
-/** Loader-independent startup entry point. */
 public final class ClientUpdateBootstrap {
+
     private ClientUpdateBootstrap() {
     }
 
@@ -41,7 +50,6 @@ public final class ClientUpdateBootstrap {
                 + "; connectTimeout=" + config.connectTimeout().toSeconds() + "s"
                 + "; readTimeout=" + config.readTimeout().toSeconds() + "s");
 
-        // Attempt to fetch and parse manifest. Failure must stop the mod loading.
         Manifest manifest;
         try {
             manifest = ClientUpdateManifestFetcher.fetchManifest(
@@ -50,7 +58,7 @@ public final class ClientUpdateBootstrap {
                     config.readTimeout());
         } catch (ManifestFetchException e) {
             platform.log("Mandatory update check failed: " + e.getMessage());
-            throw e; // stop startup
+            throw e;
         } catch (Exception e) {
             platform.log("Unexpected error during update check: " + e.getMessage());
             throw new RuntimeException("Failed to perform mandatory update check", e);
@@ -60,7 +68,6 @@ public final class ClientUpdateBootstrap {
                 + ", revision=" + manifest.revision()
                 + ", mods=" + manifest.modCount());
 
-        // ---- scan installed mods against manifest ----
         Path modsDirectory = platform.gameDirectory().resolve("mods");
         List<InstalledMod> installedMods = platform.installedMods();
         ScanResult scanResult = ModUpdateScanner.scan(manifest, target, modsDirectory, installedMods);
@@ -74,6 +81,33 @@ public final class ClientUpdateBootstrap {
                     + " targetVersion=" + candidate.selectedVariant().artifact().version());
         }
 
-        // No downloading or installation yet.
+        try {
+            URI manifestUri = config.manifestUri().orElseThrow();
+            DownloadBatchResult batchResult = ArtifactDownloader.downloadBatch(
+                    manifest, manifestUri, scanResult, platform.gameDirectory(),
+                    config.connectTimeout(), config.readTimeout());
+
+            platform.log("Downloaded: " + batchResult.downloaded().size()
+                    + " failed: " + batchResult.failed().size()
+                    + " manual: " + batchResult.manualUpdates().size());
+            for (DownloadedArtifact downloaded : batchResult.downloaded()) {
+                platform.log("  downloaded " + downloaded.fileName() + " modIds=" + downloaded.modIds());
+            }
+            for (DownloadFailure failure : batchResult.failed()) {
+                platform.log("  FAILED " + failure.fileName() + " modIds=" + failure.modIds()
+                        + " category=" + failure.category() + " message=" + failure.message());
+            }
+            for (ManualUpdate manual : batchResult.manualUpdates()) {
+                platform.log("  MANUAL " + manual.fileName() + " modIds=" + manual.modIds()
+                        + " pageUrl=" + manual.pageUrl() + " msg=" + manual.message());
+            }
+            DownloadReportWriter.writeReport(batchResult, platform.gameDirectory());
+        } catch (Exception e) {
+            platform.log("Download phase failed: " + e.getMessage());
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            throw new DownloadException("Download phase failed", e);
+        }
     }
 }

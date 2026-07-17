@@ -23,7 +23,15 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
 - 运行平台检测，能够区分桌面 Linux 与将 `os.name` 报告为 Linux 的 Android JVM；
 - 稳定的下载目标标识，例如 `fabric-windows-x86_64` 和 `neoforge-android-aarch64`。
 - 从配置的 `manifestUrl` 拉取更新清单并执行完整的 schema 及语义验证（包括版本、时间戳、过期、必需字段、modid 格式、选择器枚举、下载类型等）。
-- **已实现** Mod 扫描及 variant 匹配，可产生更新候选但尚未下载/安装。
+- **已实现** Mod 扫描及 variant 匹配，已下载到暂存区（`.mc-client-update/downloads/sha512-<HASH>/<fileName>` 或 `sha256-<HASH>/<fileName>`），但尚未安装到 mods 目录。
+
+**已实现** 根据更新候选下载 artifact 并写入报告：
+  - 三种下载方式：`hosted`（相对 URL 可使用 `baseUrl` 或 manifest URI 解析）、`direct`（绝对直链）、`manual`（不自动下载，仅记录）。
+  - 相同 artifact 的多个候选去重后只下载一次，结果中保留所有关联的 modId。
+  - 下载缓存于 `.mc-client-update/downloads/<sha512-/sha256-HASH>/<fileName>`，命中后跳过网络。
+  - 下载失败不中断其他 artifact，InterruptedException 会安全停止后续下载。
+  - 每次扫描结束后自动写入 `config/mc-client-update-download-report.json`（原子覆盖），包含成功、失败和手动更新的细节。
+  - 下载完成后 **不安装 JAR 到 mods 目录**，也不触发重启。
 
 ## 平台目标
 
@@ -77,7 +85,7 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 示例中的重复字符哈希、`example.invalid` 地址和标有 `replace-with-generated-*` 的值
 仅用于展示结构，不能直接作为生产清单发布；生成脚本必须用实际文件元数据替换。
 
-服务器更新清单的地址、认证和 JSON 格式尚未确定，因此目前没有发起网络请求。
+配置 `manifestUrl` 后启动时会拉取更新清单、扫描已安装 Mod、下载更新到 `.mc-client-update/downloads/` 暂存区并自动写入 `config/mc-client-update-download-report.json`。
 
 ## 构建
 
