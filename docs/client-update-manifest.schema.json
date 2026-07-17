@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/client-update-manifest.schema.json",
+  "title": "MC Client Update manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestId", "revision", "generatedAt", "minecraftVersion", "mods"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "manifestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "minecraftVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseUrl": {
+      "type": "string",
+      "format": "uri"
+    },
+    "mods": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/mod"
+      }
+    }
+  },
+  "$defs": {
+    "mod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "required", "variants"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "license": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "artifact"],
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/selector"
+        },
+        "priority": {
+          "type": "integer",
+          "default": 0
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        }
+      }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "loaders": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["fabric", "neoforge"]
+          }
+        },
+        "operatingSystems": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["android", "windows", "linux", "macos"]
+          }
+        },
+        "architectures": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["x86_64", "x86_32", "aarch64", "arm32", "riscv64"]
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "fileName", "size", "hashes", "download"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fileName": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+\\.jar$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hashes": {
+          "$ref": "#/$defs/hashes"
+        },
+        "download": {
+          "oneOf": [
+            { "$ref": "#/$defs/hostedDownload" },
+            { "$ref": "#/$defs/directDownload" },
+            { "$ref": "#/$defs/manualDownload" }
+          ]
+        }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "sha512": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{128}$"
+        }
+      }
+    },
+    "hostedDownload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url"],
+      "properties": {
+        "type": {
+          "const": "hosted"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri-reference"
+        }
+      }
+    },
+    "directDownload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url"],
+      "properties": {
+        "type": {
+          "const": "direct"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "provider": {
+          "enum": ["modrinth", "curseforge", "github", "other"]
+        },
+        "projectId": {
+          "type": ["string", "integer"]
+        },
+        "versionId": {
+          "type": ["string", "integer"]
+        }
+      }
+    },
+    "manualDownload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pageUrl"],
+      "properties": {
+        "type": {
+          "const": "manual"
+        },
+        "pageUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

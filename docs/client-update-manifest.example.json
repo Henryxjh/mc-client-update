@@ -1,0 +1,129 @@
+{
+  "$schema": "./client-update-manifest.schema.json",
+  "schemaVersion": 1,
+  "manifestId": "henry-friends-1.21.1",
+  "revision": 17,
+  "generatedAt": "2026-07-17T12:00:00Z",
+  "expiresAt": "2026-07-24T12:00:00Z",
+  "minecraftVersion": "1.21.1",
+  "baseUrl": "https://updates.example.invalid/client/1.21.1/",
+  "mods": {
+    "my_private_mod": {
+      "name": "My Private Mod",
+      "required": true,
+      "variants": [
+        {
+          "selector": {
+            "loaders": ["fabric"]
+          },
+          "artifact": {
+            "version": "1.4.0",
+            "fileName": "my-private-mod-fabric-1.4.0.jar",
+            "size": 483291,
+            "hashes": {
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            "download": {
+              "type": "hosted",
+              "url": "mods/my-private-mod-fabric-1.4.0.jar"
+            }
+          }
+        },
+        {
+          "selector": {
+            "loaders": ["neoforge"]
+          },
+          "artifact": {
+            "version": "1.4.0",
+            "fileName": "my-private-mod-neoforge-1.4.0.jar",
+            "size": 491028,
+            "hashes": {
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            "download": {
+              "type": "hosted",
+              "url": "mods/my-private-mod-neoforge-1.4.0.jar"
+            }
+          }
+        }
+      ]
+    },
+    "sable": {
+      "name": "Sable",
+      "required": true,
+      "homepage": "https://modrinth.com/mod/sable",
+      "license": "PolyForm-Shield-1.0.0",
+      "variants": [
+        {
+          "selector": {
+            "loaders": ["neoforge"],
+            "operatingSystems": ["android"],
+            "architectures": ["aarch64"]
+          },
+          "priority": 100,
+          "artifact": {
+            "version": "1.2.2-android",
+            "fileName": "sable-ANDROID-mc1.21.1-1.2.2-neoforge.jar",
+            "size": 7021579,
+            "hashes": {
+              "sha256": "e720c099dee3a99ba2a591ff463c45c6535763985fa433fae2ced56bb9814d9a"
+            },
+            "download": {
+              "type": "direct",
+              "provider": "github",
+              "projectId": "aksksklskdamkwkskskd-del/sable_android",
+              "versionId": "mc1.21.1-1.2.2-neoforge",
+              "url": "https://github.com/aksksklskdamkwkskskd-del/sable_android/releases/download/mc1.21.1-1.2.2-neoforge/sable-ANDROID-mc1.21.1-1.2.2-neoforge.jar"
+            }
+          }
+        },
+        {
+          "selector": {
+            "loaders": ["neoforge"],
+            "operatingSystems": ["windows", "linux", "macos"]
+          },
+          "artifact": {
+            "version": "2.0.3",
+            "fileName": "sable-neoforge-1.21.1-2.0.3.jar",
+            "size": 8000000,
+            "hashes": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            },
+            "download": {
+              "type": "direct",
+              "provider": "modrinth",
+              "projectId": "sable",
+              "versionId": "replace-with-generated-version-id",
+              "url": "https://cdn.modrinth.com/data/replace-with-generated-file-url.jar"
+            }
+          }
+        }
+      ]
+    },
+    "restricted_mod": {
+      "name": "Restricted Redistribution Example",
+      "required": true,
+      "license": "ARR",
+      "variants": [
+        {
+          "selector": {
+            "loaders": ["neoforge"]
+          },
+          "artifact": {
+            "version": "3.0.0",
+            "fileName": "restricted-mod-3.0.0.jar",
+            "size": 1200000,
+            "hashes": {
+              "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+            },
+            "download": {
+              "type": "manual",
+              "pageUrl": "https://mods.example.invalid/restricted-mod/download",
+              "message": "该 Mod 不允许镜像，请从作者页面下载指定版本后重新启动游戏。"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
