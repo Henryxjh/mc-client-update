@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -420,10 +419,6 @@ public final class ClientUpdateManifestFetcher {
         };
     }
 
-    private static <T> T throwMissing(String field) {
-        throw new ManifestFetchException("Required field missing: " + field);
-    }
-
     private static Optional<String> optionalString(Object obj) {
         if (obj == null) {
             return Optional.empty();
@@ -434,7 +429,6 @@ public final class ClientUpdateManifestFetcher {
 
     // --------------- JSON mapping classes ---------------
 
-    @SuppressWarnings("unused")
     private static final class ManifestJson {
         @SerializedName("schemaVersion")
         Integer schemaVersion;
@@ -447,7 +441,6 @@ public final class ClientUpdateManifestFetcher {
         Map<String, ModJson> mods;
     }
 
-    @SuppressWarnings("unused")
     private static final class ModJson {
         String name;
         Boolean required;
@@ -456,21 +449,18 @@ public final class ClientUpdateManifestFetcher {
         List<VariantJson> variants;
     }
 
-    @SuppressWarnings("unused")
     private static final class VariantJson {
         SelectorJson selector;
         int priority;
         ArtifactJson artifact;
     }
 
-    @SuppressWarnings("unused")
     private static final class SelectorJson {
         List<String> loaders;
         List<String> operatingSystems;
         List<String> architectures;
     }
 
-    @SuppressWarnings("unused")
     private static final class ArtifactJson {
         String version;
         String fileName;
@@ -479,13 +469,11 @@ public final class ClientUpdateManifestFetcher {
         DownloadJson download;
     }
 
-    @SuppressWarnings("unused")
     private static final class HashesJson {
         String sha256;
         String sha512;
     }
 
-    @SuppressWarnings("unused")
     private static final class DownloadJson {
         String type;
         String url;

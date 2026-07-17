@@ -1,6 +1,8 @@
 package io.github.henryxjh.mcclientupdate.platform;
 
+import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import java.nio.file.Path;
+import java.util.List;
 
 public interface PlatformContext {
     String loaderName();
@@ -10,4 +12,6 @@ public interface PlatformContext {
     Path selfModPath();
 
     void log(String message);
+
+    List<InstalledMod> installedMods();
 }

@@ -7,6 +7,12 @@ import io.github.henryxjh.mcclientupdate.manifest.ManifestFetchException;
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 import io.github.henryxjh.mcclientupdate.platform.RuntimePlatform;
 import io.github.henryxjh.mcclientupdate.platform.UpdateTarget;
+import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
+import io.github.henryxjh.mcclientupdate.scan.ModUpdateScanner;
+import io.github.henryxjh.mcclientupdate.scan.ScanResult;
+import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 
 /** Loader-independent startup entry point. */
@@ -18,9 +24,7 @@ public final class ClientUpdateBootstrap {
         Objects.requireNonNull(platform, "platform");
         UpdateTarget target = UpdateTarget.detect(platform);
         platform.log("MC Client Update initialized on " + platform.loaderName()
-                + "; target=" + target.classifier()
-                + "; gameDir=" + platform.gameDirectory()
-                + "; self=" + platform.selfModPath());
+                + "; target=" + target.classifier());
 
         RuntimePlatform runtime = target.platform();
         platform.log("Runtime platform detected as " + runtime.classifier()
@@ -56,5 +60,20 @@ public final class ClientUpdateBootstrap {
                 + ", revision=" + manifest.revision()
                 + ", mods=" + manifest.modCount());
 
+        // ---- scan installed mods against manifest ----
+        Path modsDirectory = platform.gameDirectory().resolve("mods");
+        List<InstalledMod> installedMods = platform.installedMods();
+        ScanResult scanResult = ModUpdateScanner.scan(manifest, target, modsDirectory, installedMods);
+
+        platform.log("Installed managed mods: " + scanResult.installedManagedModCount()
+                + "; update candidates: " + scanResult.candidates().size());
+
+        for (UpdateCandidate candidate : scanResult.candidates()) {
+            platform.log("  " + candidate.modId()
+                    + " reason=" + candidate.reason()
+                    + " targetVersion=" + candidate.selectedVariant().artifact().version());
+        }
+
+        // No downloading or installation yet.
     }
 }

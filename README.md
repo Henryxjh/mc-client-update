@@ -22,7 +22,8 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
 - 更新完成后可由启动线程抛出的 `RestartRequiredException`。
 - 运行平台检测，能够区分桌面 Linux 与将 `os.name` 报告为 Linux 的 Android JVM；
 - 稳定的下载目标标识，例如 `fabric-windows-x86_64` 和 `neoforge-android-aarch64`。
-- 从配置的 `manifestUrl` 拉取更新清单并执行完整的 schema 及语义验证（包括版本、时间戳、过期、必需字段、modid 格式、选择器枚举、下载类型等）。**尚未实现** Mod 扫描、variant 匹配、文件下载以及实际安装。
+- 从配置的 `manifestUrl` 拉取更新清单并执行完整的 schema 及语义验证（包括版本、时间戳、过期、必需字段、modid 格式、选择器枚举、下载类型等）。
+- **已实现** Mod 扫描及 variant 匹配，可产生更新候选但尚未下载/安装。
 
 ## 平台目标
 
