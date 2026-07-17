@@ -1,4 +1,4 @@
-package io.github.henryxjh.mcclientupdate;
+package io.github.henryxjh.mcclientupdate.platform;
 
 /** Stable operating-system identifiers used by the update manifest. */
 public enum OperatingSystem {

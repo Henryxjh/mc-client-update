@@ -1,4 +1,4 @@
-package io.github.henryxjh.mcclientupdate;
+package io.github.henryxjh.mcclientupdate.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

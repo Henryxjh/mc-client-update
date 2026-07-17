@@ -1,5 +1,12 @@
 package io.github.henryxjh.mcclientupdate;
 
+import io.github.henryxjh.mcclientupdate.config.ClientUpdateConfig;
+import io.github.henryxjh.mcclientupdate.manifest.ClientUpdateManifestFetcher;
+import io.github.henryxjh.mcclientupdate.manifest.Manifest;
+import io.github.henryxjh.mcclientupdate.manifest.ManifestFetchException;
+import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
+import io.github.henryxjh.mcclientupdate.platform.RuntimePlatform;
+import io.github.henryxjh.mcclientupdate.platform.UpdateTarget;
 import java.util.Objects;
 
 /** Loader-independent startup entry point. */
@@ -30,7 +37,24 @@ public final class ClientUpdateBootstrap {
                 + "; connectTimeout=" + config.connectTimeout().toSeconds() + "s"
                 + "; readTimeout=" + config.readTimeout().toSeconds() + "s");
 
-        // The server manifest protocol will be connected here. The filesystem
-        // transaction implementation is intentionally usable without either loader.
+        // Attempt to fetch and parse manifest. Failure must stop the mod loading.
+        Manifest manifest;
+        try {
+            manifest = ClientUpdateManifestFetcher.fetchManifest(
+                    config.manifestUri().orElseThrow(),
+                    config.connectTimeout(),
+                    config.readTimeout());
+        } catch (ManifestFetchException e) {
+            platform.log("Mandatory update check failed: " + e.getMessage());
+            throw e; // stop startup
+        } catch (Exception e) {
+            platform.log("Unexpected error during update check: " + e.getMessage());
+            throw new RuntimeException("Failed to perform mandatory update check", e);
+        }
+
+        platform.log("Update manifest loaded: manifestId=" + manifest.manifestId()
+                + ", revision=" + manifest.revision()
+                + ", mods=" + manifest.modCount());
+
     }
 }

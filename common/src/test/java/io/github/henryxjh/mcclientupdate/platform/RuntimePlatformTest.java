@@ -1,4 +1,4 @@
-package io.github.henryxjh.mcclientupdate;
+package io.github.henryxjh.mcclientupdate.platform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

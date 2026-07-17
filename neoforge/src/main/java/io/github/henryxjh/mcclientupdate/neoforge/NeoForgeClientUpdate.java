@@ -2,7 +2,7 @@ package io.github.henryxjh.mcclientupdate.neoforge;
 
 import com.mojang.logging.LogUtils;
 import io.github.henryxjh.mcclientupdate.ClientUpdateBootstrap;
-import io.github.henryxjh.mcclientupdate.PlatformContext;
+import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 import java.nio.file.Path;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;

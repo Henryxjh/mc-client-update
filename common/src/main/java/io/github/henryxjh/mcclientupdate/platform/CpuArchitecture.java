@@ -1,4 +1,4 @@
-package io.github.henryxjh.mcclientupdate;
+package io.github.henryxjh.mcclientupdate.platform;
 
 /** Stable CPU architecture identifiers used by the update manifest. */
 public enum CpuArchitecture {

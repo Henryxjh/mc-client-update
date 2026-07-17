@@ -2,7 +2,7 @@ package io.github.henryxjh.mcclientupdate.fabric;
 
 import com.mojang.logging.LogUtils;
 import io.github.henryxjh.mcclientupdate.ClientUpdateBootstrap;
-import io.github.henryxjh.mcclientupdate.PlatformContext;
+import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 import java.nio.file.Path;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;

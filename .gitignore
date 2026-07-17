@@ -23,3 +23,5 @@ test-mod/
 *.log
 .DS_Store
 Thumbs.db
+
+.aider*
