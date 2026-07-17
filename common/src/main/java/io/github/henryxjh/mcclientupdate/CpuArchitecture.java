@@ -7,6 +7,7 @@ public enum CpuArchitecture {
     AARCH64("aarch64"),
     ARM32("arm32"),
     RISCV64("riscv64"),
+    LOONGARCH64("loongarch64"),
     UNKNOWN("unknown");
 
     private final String id;

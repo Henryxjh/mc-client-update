@@ -120,7 +120,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": {
-            "enum": ["x86_64", "x86_32", "aarch64", "arm32", "riscv64"]
+            "enum": ["x86_64", "x86_32", "aarch64", "arm32", "riscv64", "loongarch64"]
           }
         }
       }
@@ -157,7 +157,7 @@
     "hashes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sha256"],
+      "minProperties": 1,
       "properties": {
         "sha256": {
           "type": "string",

@@ -39,6 +39,9 @@ class RuntimePlatformTest {
         assertEquals(
                 "macos-aarch64",
                 RuntimePlatform.detect(properties("Mac OS X", "15.0", "arm64"), false).classifier());
+        assertEquals(
+                "linux-loongarch64",
+                RuntimePlatform.detect(properties("Linux", "6.12", "loong64"), false).classifier());
     }
 
     @Test

@@ -19,16 +19,14 @@ public final class JarTransaction {
     private JarTransaction() {
     }
 
-    public static Result install(Path currentJar, Path candidateJar, String expectedSha256) throws IOException {
+    public static Result install(Path currentJar, Path candidateJar, Hashing.Hashes expectedHashes) throws IOException {
         Path current = normalize(currentJar);
         Path candidate = normalize(candidateJar);
-        String expected = Hashing.normalizeSha256(expectedSha256);
+        Hashing.Hashes expected = Objects.requireNonNull(expectedHashes, "expectedHashes");
         validateInputs(current, candidate);
 
-        String candidateHash = Hashing.sha256(candidate);
-        if (!candidateHash.equals(expected)) {
-            throw new IOException("Candidate SHA-256 mismatch for " + candidate);
-        }
+        Hashing.Hashes candidateHashes = Hashing.hashes(candidate);
+        verifyHashes("Candidate", candidate, candidateHashes, expected);
         forceFile(candidate);
 
         Path backup = backupPath(current);
@@ -39,11 +37,9 @@ public final class JarTransaction {
         MoveMode backupMove = move(current, backup);
         try {
             MoveMode installMove = move(candidate, current);
-            String installedHash = Hashing.sha256(current);
-            if (!installedHash.equals(expected)) {
-                throw new IOException("Installed SHA-256 mismatch for " + current);
-            }
-            return new Result(current, backup, backupMove, installMove, installedHash);
+            Hashing.Hashes installedHashes = Hashing.hashes(current);
+            verifyHashes("Installed", current, installedHashes, expected);
+            return new Result(current, backup, backupMove, installMove, installedHashes);
         } catch (IOException installFailure) {
             if (Files.exists(backup)) {
                 try {
@@ -82,6 +78,19 @@ public final class JarTransaction {
         }
         if (current.equals(candidate)) {
             throw new IOException("Candidate and current JAR are the same path");
+        }
+    }
+
+    private static void verifyHashes(
+            String stage,
+            Path file,
+            Hashing.Hashes actual,
+            Hashing.Hashes expected) throws IOException {
+        if (expected.hasSha256() && !actual.sha256().equals(expected.sha256())) {
+            throw new IOException(stage + " SHA-256 mismatch for " + file);
+        }
+        if (expected.hasSha512() && !actual.sha512().equals(expected.sha512())) {
+            throw new IOException(stage + " SHA-512 mismatch for " + file);
         }
     }
 
@@ -132,7 +141,7 @@ public final class JarTransaction {
             Path backupJar,
             MoveMode backupMove,
             MoveMode installMove,
-            String installedSha256
+            Hashing.Hashes installedHashes
     ) {
     }
 }

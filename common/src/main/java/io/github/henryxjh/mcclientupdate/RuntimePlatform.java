@@ -90,6 +90,7 @@ public record RuntimePlatform(
             case "aarch64", "arm64", "armv8", "armv8l" -> CpuArchitecture.AARCH64;
             case "arm", "arm32", "armv7", "armv7l" -> CpuArchitecture.ARM32;
             case "riscv64" -> CpuArchitecture.RISCV64;
+            case "loongarch64", "loong64" -> CpuArchitecture.LOONGARCH64;
             default -> CpuArchitecture.UNKNOWN;
         };
     }

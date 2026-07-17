@@ -27,7 +27,7 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
 
 清单中的平台相关文件应使用 `加载器-系统-架构` 目标标识。当前系统标识为
 `android`、`windows`、`linux`、`macos`，架构标识为 `x86_64`、`x86_32`、
-`aarch64`、`arm32` 和 `riscv64`。无法识别的值使用 `unknown`，不应自动降级到
+`aarch64`、`arm32`、`riscv64` 和 `loongarch64`。无法识别的值使用 `unknown`，不应自动降级到
 其他架构的 native 文件。
 
 Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/运行时信息以及
@@ -66,8 +66,9 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 - `direct`：使用 Modrinth、CurseForge、GitHub 或作者提供的外部直链；
 - `manual`：只展示作者下载页面和提示，不自动下载。
 
-`version` 用于展示，是否已经安装目标文件必须以 `sha256` 为准。下载后还必须同时
-校验 `size` 和 `sha256`，校验通过后才能进入 JAR 替换事务。`provider`、`projectId`、
+`version` 用于展示，是否已经安装目标文件必须以哈希为准。`sha256` 和 `sha512`
+可以任选其一，也可以同时提供，但 `hashes` 中至少要有一种。下载后必须校验 `size`
+和清单提供的全部哈希，全部通过后才能进入 JAR 替换事务。`provider`、`projectId`、
 `versionId` 和 `license` 都是可选的来源记录字段，客户端不应依赖它们完成下载，
 因此自己拥有版权的闭源 Mod 使用 `hosted` 时无需填写这些字段。
 
