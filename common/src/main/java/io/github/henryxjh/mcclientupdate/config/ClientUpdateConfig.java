@@ -25,14 +25,27 @@ public final class ClientUpdateConfig {
     private static final int DEFAULT_READ_TIMEOUT_SECONDS = 30;
     private static final int MAX_TIMEOUT_SECONDS = 300;
 
+    private static final int DEFAULT_CLEANUP_BACKUPS_AFTER_DAYS = 14;
+    private static final int DEFAULT_CLEANUP_DOWNLOAD_CACHE_AFTER_DAYS = 30;
+    private static final int MAX_CLEANUP_AFTER_DAYS = 3650;
+
     private final URI manifestUri;
     private final Duration connectTimeout;
     private final Duration readTimeout;
+    private final int cleanupBackupsAfterDays;
+    private final int cleanupDownloadCacheAfterDays;
 
-    private ClientUpdateConfig(URI manifestUri, Duration connectTimeout, Duration readTimeout) {
+    private ClientUpdateConfig(
+            URI manifestUri,
+            Duration connectTimeout,
+            Duration readTimeout,
+            int cleanupBackupsAfterDays,
+            int cleanupDownloadCacheAfterDays) {
         this.manifestUri = manifestUri;
         this.connectTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.readTimeout = Objects.requireNonNull(readTimeout, "readTimeout");
+        this.cleanupBackupsAfterDays = cleanupBackupsAfterDays;
+        this.cleanupDownloadCacheAfterDays = cleanupDownloadCacheAfterDays;
     }
 
     public static ClientUpdateConfig load(Path gameDirectory) {
@@ -56,10 +69,17 @@ public final class ClientUpdateConfig {
                 "readTimeoutSeconds", json.readTimeoutSeconds, configPath);
         URI manifestUri = parseManifestUri(json.manifestUrl, json.allowInsecureHttp, configPath);
 
+        int cleanupBackups = validateDays(
+                "cleanupBackupsAfterDays", json.cleanupBackupsAfterDays, configPath);
+        int cleanupCache = validateDays(
+                "cleanupDownloadCacheAfterDays", json.cleanupDownloadCacheAfterDays, configPath);
+
         return new ClientUpdateConfig(
                 manifestUri,
                 Duration.ofSeconds(connectTimeoutSeconds),
-                Duration.ofSeconds(readTimeoutSeconds));
+                Duration.ofSeconds(readTimeoutSeconds),
+                cleanupBackups,
+                cleanupCache);
     }
 
     public Optional<URI> manifestUri() {
@@ -76,6 +96,16 @@ public final class ClientUpdateConfig {
 
     public Duration readTimeout() {
         return readTimeout;
+    }
+
+    /** Number of days after which install‑time backup/residual files are eligible for cleanup. */
+    public int cleanupBackupsAfterDays() {
+        return cleanupBackupsAfterDays;
+    }
+
+    /** Number of days after which download‑cache files are eligible for cleanup. */
+    public int cleanupDownloadCacheAfterDays() {
+        return cleanupDownloadCacheAfterDays;
     }
 
     /** Endpoint suitable for logs: user info, query parameters and fragments are removed. */
@@ -126,6 +156,14 @@ public final class ClientUpdateConfig {
         return seconds;
     }
 
+    private static int validateDays(String name, int days, Path configPath) {
+        if (days < 0 || days > MAX_CLEANUP_AFTER_DAYS) {
+            throw new IllegalStateException(
+                    name + " must be between 0 and " + MAX_CLEANUP_AFTER_DAYS + " in " + configPath);
+        }
+        return days;
+    }
+
     private static URI parseManifestUri(String value, boolean allowInsecureHttp, Path configPath) {
         if (value == null || value.isBlank()) {
             return null;
@@ -161,5 +199,7 @@ public final class ClientUpdateConfig {
         private int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
         private int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
         private boolean allowInsecureHttp;
+        private int cleanupBackupsAfterDays = DEFAULT_CLEANUP_BACKUPS_AFTER_DAYS;
+        private int cleanupDownloadCacheAfterDays = DEFAULT_CLEANUP_DOWNLOAD_CACHE_AFTER_DAYS;
     }
 }

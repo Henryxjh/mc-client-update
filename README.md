@@ -58,11 +58,21 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
   "manifestUrl": "",
   "connectTimeoutSeconds": 10,
   "readTimeoutSeconds": 30,
-  "allowInsecureHttp": false
+  "allowInsecureHttp": false,
+  "cleanupBackupsAfterDays": 14,
+  "cleanupDownloadCacheAfterDays": 30
 }
 ```
 
+- `cleanupBackupsAfterDays`（默认 14）：删除 `mods/` 目录中最后修改时间超过该天数的安全后缀文件，
+  后缀包括 `.mc-client-update-old`、`.mc-client-update-deleted`、`.mc-client-update-rejected`、
+  `.mc-client-update-pending`。设为 0 禁用该清理。
+- `cleanupDownloadCacheAfterDays`（默认 30）：删除 `.mc-client-update/downloads/`
+  下的过期文件和空目录。设为 0 禁用。
+- 两项值必须介于 0 和 3650 之间；负数或越界将在启动时报错。
+
 填写 `manifestUrl` 后启用启动检查；留空时不联网。更新地址默认必须使用 HTTPS。
+配置中还包含两项可选清理字段（见上）；缺失时使用各自的默认值。
 `allowInsecureHttp` 仅用于可信局域网或本机测试，不建议分发给玩家时启用。超时范围为
 1 到 300 秒。配置文件存在但格式或地址无效时启动会明确失败，避免错误配置导致客户
 端在不知情的情况下跳过强制更新。

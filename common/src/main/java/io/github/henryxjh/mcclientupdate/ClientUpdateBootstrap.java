@@ -2,9 +2,12 @@ package io.github.henryxjh.mcclientupdate;
 
 import java.net.URI;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
+import io.github.henryxjh.mcclientupdate.cleanup.CleanupResult;
+import io.github.henryxjh.mcclientupdate.cleanup.UpdateCleanup;
 import io.github.henryxjh.mcclientupdate.config.ClientUpdateConfig;
 import io.github.henryxjh.mcclientupdate.download.ArtifactDownloader;
 import io.github.henryxjh.mcclientupdate.download.DownloadBatchResult;
@@ -145,6 +148,31 @@ public final class ClientUpdateBootstrap {
         }
 
         DownloadReportWriter.writeFullReport(batchResult, installResult, platform.gameDirectory());
+
+        // ---- cleanup stale backups and download cache ----
+        int backupDays = config.cleanupBackupsAfterDays();
+        int cacheDays = config.cleanupDownloadCacheAfterDays();
+        Duration backupRetention = backupDays > 0
+                ? Duration.ofDays(backupDays) : Duration.ZERO;
+        Duration cacheRetention = cacheDays > 0
+                ? Duration.ofDays(cacheDays) : Duration.ZERO;
+
+        if (backupRetention.isZero() && cacheRetention.isZero()) {
+            platform.log("Cleanup disabled (both retention days set to 0)");
+        } else {
+            try {
+                CleanupResult cleanupResult = UpdateCleanup.cleanup(
+                        platform.gameDirectory(), backupRetention, cacheRetention);
+                platform.log("Cleanup completed: "
+                        + "deleted backup files=" + cleanupResult.deletedBackupFiles()
+                        + ", deleted cache files=" + cleanupResult.deletedCacheFiles()
+                        + ", deleted cache directories=" + cleanupResult.deletedCacheDirectories()
+                        + ", failures=" + cleanupResult.failureCount());
+            } catch (Exception e) {
+                platform.log("Cleanup failed: " + e.getMessage());
+            }
+        }
+        // ---------------------------------------------------
 
         String attentionText = UpdateAttentionMessage.formatMessage(
                 batchResult.manualUpdates(),
