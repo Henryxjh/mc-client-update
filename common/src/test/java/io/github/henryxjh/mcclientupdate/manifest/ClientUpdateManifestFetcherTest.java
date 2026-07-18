@@ -980,6 +980,80 @@ class ClientUpdateManifestFetcherTest {
     }
 
     @Test
+    void shouldAcceptSkipIfInstalledVersionGreaterThan() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+            {
+              "schemaVersion": 1,
+              "manifestId": "skip-ver",
+              "revision": 0,
+              "generatedAt": "%s",
+              "minecraftVersion": "1.21.1",
+              "mods": {
+                "sv": {
+                  "name": "SkipVers",
+                  "required": true,
+                  "skipIfInstalledVersionGreaterThan": "1.2.0",
+                  "variants": [
+                    {
+                      "selector": {},
+                      "artifact": {
+                        "version": "1.2.0",
+                        "fileName": "sv.jar",
+                        "size": 1,
+                        "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                        "download": { "type": "hosted", "url": "sv.jar" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }""".formatted(time);
+        respond(HTTP_OK, json);
+        Manifest m = fetch();
+        Mod mod = m.mods().get("sv");
+        assertNotNull(mod);
+        assertTrue(mod.skipIfInstalledVersionGreaterThan().isPresent());
+        assertEquals("1.2.0", mod.skipIfInstalledVersionGreaterThan().get());
+    }
+
+    @Test
+    void shouldRejectBlankSkipIfInstalledVersionGreaterThan() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+            {
+              "schemaVersion": 1,
+              "manifestId": "blank-skip",
+              "revision": 0,
+              "generatedAt": "%s",
+              "minecraftVersion": "1.21.1",
+              "mods": {
+                "bs": {
+                  "name": "BlankSkip",
+                  "required": true,
+                  "skipIfInstalledVersionGreaterThan": "   ",
+                  "variants": [
+                    {
+                      "selector": {},
+                      "artifact": {
+                        "version": "2.0.0",
+                        "fileName": "bs.jar",
+                        "size": 1,
+                        "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                        "download": { "type": "hosted", "url": "bs.jar" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }""".formatted(time);
+        respond(HTTP_OK, json);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("blank"),
+                "should reject blank skipIfInstalledVersionGreaterThan");
+    }
+
+    @Test
     void shouldAcceptForgeInSelectorLoader() {
         String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
         String body = """

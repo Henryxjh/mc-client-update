@@ -146,6 +146,15 @@ public final class ModUpdateScanner {
                             "Installed mod " + modId + " is outside the mods directory");
                 }
 
+                // skip if installed version greater than threshold (only for INSTALL action)
+                if (mod.action() == ModAction.INSTALL
+                        && mod.skipIfInstalledVersionGreaterThan().isPresent()) {
+                    if (compareVersions(installed.version(),
+                            mod.skipIfInstalledVersionGreaterThan().get()) > 0) {
+                        continue;
+                    }
+                }
+
                 // check hashes
                 Hashing.Hashes fileHashes;
                 try {

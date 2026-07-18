@@ -274,3 +274,44 @@ def test_build_manifest_direct_has_provider_metadata(ws):
         assert dl["projectId"] == "abc123"
         assert dl["versionId"] == "def456"
     os.unlink(tf.name)
+
+
+def test_build_manifest_includes_skip_if_installed_version_greater_than(ws):
+    with tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf:
+        tf.write(b"content")
+        tf.flush()
+        variant = make_variant(tf.name, download_type="hosted")
+        ws["mods"] = {
+            "coolmod": {
+                "name": "Cool",
+                "required": True,
+                "license": "mit",
+                "skipIfInstalledVersionGreaterThan": "1.2.3",
+                "variants": [variant],
+            }
+        }
+        ws["minecraftVersion"] = "1.21.1"
+        manifest = build_manifest(ws)
+        mod = manifest["mods"]["coolmod"]
+        assert mod["skipIfInstalledVersionGreaterThan"] == "1.2.3"
+    os.unlink(tf.name)
+
+
+def test_build_rejects_blank_skip_if_installed_version_greater_than(ws):
+    with tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf:
+        tf.write(b"content")
+        tf.flush()
+        variant = make_variant(tf.name, download_type="hosted")
+        ws["mods"] = {
+            "badmod": {
+                "name": "Bad",
+                "required": False,
+                "license": "mit",
+                "skipIfInstalledVersionGreaterThan": "   ",
+                "variants": [variant],
+            }
+        }
+        ws["minecraftVersion"] = "1.21.1"
+        with pytest.raises(ValueError, match="must not be blank"):
+            build_manifest(ws)
+    os.unlink(tf.name)

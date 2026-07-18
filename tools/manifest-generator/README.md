@@ -8,7 +8,7 @@
 
 - `pyproject.toml` 和 `mcumanifest` 命令行入口。
 - `manifest-workspace.json` 读写。
-- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`remove`、`list`、`set-license`、`build`、`validate`、`completion` 子命令。
+- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`remove`、`list`、`set-license`、`set-version-policy`、`build`、`validate`、`completion` 子命令。
 - selector 枚举：loader、OS、CPU 架构（含 `loongarch64`）。
 - 重复 modid + selector 的冲突处理：非交互失败，`--force` 覆盖，`--no-overwrite` 失败。
 - `sha256` / `sha512` 与 size 计算。
@@ -148,6 +148,7 @@ mcumanifest add-manual
 mcumanifest remove
 mcumanifest list
 mcumanifest set-license
+mcumanifest set-version-policy
 mcumanifest build
 mcumanifest validate
 mcumanifest completion
@@ -164,6 +165,8 @@ mcumanifest add-manual restricted_mod --file mods/restricted.jar --page-url http
 mcumanifest remove create --loader neoforge --os linux --arch x86_64
 mcumanifest list
 mcumanifest set-license create MIT --allow-redistribution
+mcumanifest set-version-policy create --skip-if-installed-version-greater-than 1.2.0
+mcumanifest set-version-policy create --clear-skip-if-installed-version-greater-than
 mcumanifest build --base-url https://cdn.example.com/mc/1.21.1/ --output client-update-manifest.json
 mcumanifest validate --manifest client-update-manifest.json --schema ../../docs/client-update-manifest.schema.json
 mcumanifest completion bash
@@ -181,6 +184,7 @@ mcumanifest completion fish
 - `remove`：删除指定 modid，或删除指定 selector 对应的 variant。
 - `list`：以表格展示当前 workspace。
 - `set-license`：修改 license 和 `allowRedistribution`。
+- `set-version-policy`：设置或清除 `skipIfInstalledVersionGreaterThan` 字段，用于控制当已安装版本大于指定值时跳过更新。
 - `build`：计算 hash/size，生成最终 manifest，并执行校验。
 - `validate`：只校验现有 manifest 或 workspace。
 - `completion`：输出 shell 自动补全脚本，至少支持 bash、zsh、fish。

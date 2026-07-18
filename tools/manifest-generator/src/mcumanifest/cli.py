@@ -236,6 +236,38 @@ def cmd_set_license(args):
     print(f"License for '{args.modid}' updated.")
 
 
+def cmd_set_version_policy(args):
+    ws = workspace.load_workspace(args.workspace)
+    mod_entry = ws.get("mods", {}).get(args.modid)
+    if not mod_entry:
+        print(f"Mod '{args.modid}' not found", file=sys.stderr)
+        sys.exit(1)
+    has_set = args.skip_if_installed_version_greater_than is not None
+    has_clear = args.clear_skip_if_installed_version_greater_than
+    if has_set and has_clear:
+        print("Error: provide exactly one of --skip-if-installed-version-greater-than or --clear-skip-if-installed-version-greater-than",
+              file=sys.stderr)
+        sys.exit(1)
+    if not (has_set or has_clear):
+        print("Error: provide exactly one of --skip-if-installed-version-greater-than or --clear-skip-if-installed-version-greater-than",
+              file=sys.stderr)
+        sys.exit(1)
+    if has_set:
+        ver = args.skip_if_installed_version_greater_than.strip()
+        if ver == "":
+            print("Error: --skip-if-installed-version-greater-than must not be blank", file=sys.stderr)
+            sys.exit(1)
+        mod_entry["skipIfInstalledVersionGreaterThan"] = ver
+        print(f"skipIfInstalledVersionGreaterThan set to '{ver}' for mod '{args.modid}'")
+    else:  # clear
+        if "skipIfInstalledVersionGreaterThan" in mod_entry:
+            del mod_entry["skipIfInstalledVersionGreaterThan"]
+            print(f"skipIfInstalledVersionGreaterThan removed for mod '{args.modid}'")
+        else:
+            print(f"No skipIfInstalledVersionGreaterThan set for mod '{args.modid}', nothing to clear")
+    workspace.save_workspace(ws, args.workspace)
+
+
 def cmd_build(args):
     ws = workspace.load_workspace(args.workspace)
     if args.base_url:
@@ -270,6 +302,7 @@ complete -c mcumanifest -n "__fish_use_subcommand" -a add-manual -d "Add a manua
 complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
 complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
+complete -c mcumanifest -n "__fish_use_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
 complete -c mcumanifest -n "__fish_use_subcommand" -a build -d "Build the client-update-manifest.json"
 complete -c mcumanifest -n "__fish_use_subcommand" -a validate -d "Validate an existing manifest"
 complete -c mcumanifest -n "__fish_use_subcommand" -a completion -d "Generate shell completion script"
@@ -304,6 +337,9 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from scan" -l input -r -F -d 
 # set-license
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l license -d "License identifier"
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l allow-redistribution -d "Mark as redistribution allowed"
+# set-version-policy
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l skip-if-installed-version-greater-than -r -d "Version threshold for skipping install"
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l clear-skip-if-installed-version-greater-than -d "Remove skip version threshold"
 # build / validate
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l output -r -d "Output path"
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l schema -r -F -d "Path to JSON Schema file"
@@ -416,6 +452,21 @@ def main():
     p_set_lic.add_argument("--license", required=True, help="License SPDX identifier or category")
     p_set_lic.add_argument("--allow-redistribution", action="store_true", help="Mark as redistribution allowed")
 
+    # set-version-policy
+    p_set_ver = sub.add_parser("set-version-policy", help="Set skip-if-installed-version-greater-than policy for a mod")
+    p_set_ver.add_argument("modid", help="Mod identifier")
+    p_set_ver.add_argument(
+        "--skip-if-installed-version-greater-than",
+        type=str,
+        default=None,
+        help="Version threshold; skip install if installed version is greater",
+    )
+    p_set_ver.add_argument(
+        "--clear-skip-if-installed-version-greater-than",
+        action="store_true",
+        help="Remove the version threshold (disable skip)",
+    )
+
     # build
     p_build = sub.add_parser("build", help="Build the client-update-manifest.json")
     p_build.add_argument("--output", default="client-update-manifest.json", help="Output path")
@@ -446,6 +497,7 @@ def main():
         "remove": cmd_remove,
         "list": cmd_list,
         "set-license": cmd_set_license,
+        "set-version-policy": cmd_set_version_policy,
         "build": cmd_build,
         "validate": cmd_validate,
         "completion": cmd_completion,

@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -97,3 +98,81 @@ def test_direct_rejects_relative_url(tmp_path, runner):
     )
     assert result.returncode != 0
     assert "http://" in result.stderr.lower() or "https://" in result.stderr.lower()
+
+
+def test_fish_completion_contains_set_version_policy(runner):
+    result = runner("completion", "fish")
+    assert result.returncode == 0
+    assert "set-version-policy" in result.stdout
+    assert "-d \"Set skip-if-installed-version-greater-than policy for a mod\"" in result.stdout
+    assert "-l skip-if-installed-version-greater-than" in result.stdout
+    assert "-l clear-skip-if-installed-version-greater-than" in result.stdout
+    assert "-d \"Version threshold for skipping install\"" in result.stdout
+
+
+def test_set_version_policy_and_clear(tmp_path, runner):
+    import json
+    ws_file = tmp_path / "ws.json"
+    # init workspace
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    # manually add a mod entry
+    ws_data = json.loads(ws_file.read_text())
+    ws_data.setdefault("mods", {})["testmod"] = {
+        "name": "Test Mod", "required": True, "variants": []
+    }
+    ws_file.write_text(json.dumps(ws_data))
+    # set skip
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "testmod", "--skip-if-installed-version-greater-than", "1.2.3")
+    assert res.returncode == 0
+    ws2 = json.loads(ws_file.read_text())
+    assert ws2["mods"]["testmod"]["skipIfInstalledVersionGreaterThan"] == "1.2.3"
+    # clear
+    res2 = runner("--workspace", str(ws_file), "set-version-policy",
+                  "testmod", "--clear-skip-if-installed-version-greater-than")
+    assert res2.returncode == 0
+    ws3 = json.loads(ws_file.read_text())
+    assert "skipIfInstalledVersionGreaterThan" not in ws3["mods"]["testmod"]
+
+
+def test_set_version_policy_mod_not_found(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "nope", "--skip-if-installed-version-greater-than", "1.0")
+    assert res.returncode != 0
+    assert "not found" in res.stderr.lower()
+
+
+def test_set_version_policy_rejects_conflicting_flags(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    ws_data = json.loads(ws_file.read_text())
+    ws_data.setdefault("mods", {})["testmod"] = {
+        "name": "Test Mod", "required": True, "variants": []
+    }
+    ws_file.write_text(json.dumps(ws_data))
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "testmod",
+                 "--skip-if-installed-version-greater-than", "1.0",
+                 "--clear-skip-if-installed-version-greater-than")
+    assert res.returncode != 0
+    assert "exactly one" in res.stderr.lower()
+
+
+def test_set_version_policy_rejects_blank_version(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    ws_data = json.loads(ws_file.read_text())
+    ws_data.setdefault("mods", {})["testmod"] = {
+        "name": "Test Mod", "required": True, "variants": []
+    }
+    ws_file.write_text(json.dumps(ws_data))
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "testmod", "--skip-if-installed-version-greater-than", " ")
+    assert res.returncode != 0
+    assert "must not be blank" in res.stderr.lower()

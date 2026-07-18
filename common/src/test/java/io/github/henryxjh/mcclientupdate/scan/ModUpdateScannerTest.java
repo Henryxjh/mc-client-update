@@ -634,6 +634,81 @@ class ModUpdateScannerTest {
     }
 
     @Test
+    void skipIfGreaterInstalledVersionSkipsCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        byte[] content = {1, 2, 3};
+        Hashes fileHashes = writeAndHash(modJar, content);
+        Artifact art = artifact("1.5.0", content.length, Optional.empty(), Optional.of(fileHashes.sha512()));
+        // use a mismatched sha to force hash mismatch, but should be skipped because version > threshold
+        Artifact mismatchedArt = artifact("1.5.0", content.length, Optional.of("0".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, mismatchedArt);
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                Optional.of("1.4.0"), // threshold
+                List.of(var), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        InstalledMod installed = installed("mymod", "1.5.0", modJar);
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertEquals(0, result.candidates().size());
+    }
+
+    @Test
+    void skipIfEqualInstalledVersionCreatesHashMismatchCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        byte[] content = {4,5,6};
+        Hashes fileHashes = writeAndHash(modJar, content);
+        String wrongSha = Hashing.sha256(Files.writeString(modsDir.resolve("other"), "fff"));
+        Artifact art = artifact("1.3.0", content.length, Optional.of(wrongSha), Optional.of(fileHashes.sha512()));
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                Optional.of("1.3.0"), // threshold equal
+                List.of(var), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        InstalledMod installed = installed("mymod", "1.3.0", modJar);
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.HASH_MISMATCH, result.candidates().get(0).reason());
+    }
+
+    @Test
+    void skipIfLowerInstalledVersionCreatesHashMismatchCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        byte[] content = {7,8};
+        Hashes fileHashes = writeAndHash(modJar, content);
+        String wrongSha = Hashing.sha256(Files.writeString(modsDir.resolve("other2"), "abc"));
+        Artifact art = artifact("1.2.0", content.length, Optional.of(wrongSha), Optional.of(fileHashes.sha512()));
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                Optional.of("1.3.0"), // threshold > installed
+                List.of(var), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        InstalledMod installed = installed("mymod", "1.2.0", modJar);
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.HASH_MISMATCH, result.candidates().get(0).reason());
+    }
+
+    @Test
+    void skipIfInstalledVersionGreaterDoesNotAffectDeleteAction() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        Files.write(modJar, new byte[]{1});
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                Optional.of("1.0.0"), // threshold (ignored for delete)
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        InstalledMod installed = installed("mymod", "2.0.0", modJar);
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.DELETE, result.candidates().get(0).reason());
+    }
+
+    @Test
     void forgeSelectorDoesNotMatchNeoforgeTarget() throws IOException {
         Path modsDir = modsDir();
         UpdateTarget target = new UpdateTarget("neoforge",
@@ -648,5 +723,22 @@ class ModUpdateScannerTest {
         Manifest manifest = makeManifest(Map.of("mymod", mod));
         assertThrows(ModScanException.class,
                 () -> ModUpdateScanner.scan(manifest, target, modsDir, List.of()));
+    }
+
+    @Test
+    void skipIfGreaterInstalledOutsideModsDirectoryRejected() throws IOException {
+        Path modsDir = modsDir();
+        Path outside = tempDir.resolve("outside.jar");
+        Files.write(outside, new byte[]{1,2,3});
+        Artifact art = artifact("1.0", 3, Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                Optional.of("0.9"), // threshold
+                List.of(var), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        InstalledMod installed = installed("mymod", "2.0", outside);
+        assertThrows(ModScanException.class,
+                () -> ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed)));
     }
 }

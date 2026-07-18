@@ -89,6 +89,19 @@ def build_manifest(
         if license_val is not None:
             mod_entry["license"] = license_val
 
+        # skipIfInstalledVersionGreaterThan
+        skip_ver_raw = mod_data.get("skipIfInstalledVersionGreaterThan")
+        if skip_ver_raw is not None:
+            if isinstance(skip_ver_raw, str):
+                skip_ver = skip_ver_raw.strip()
+            else:
+                skip_ver = str(skip_ver_raw).strip()
+            if skip_ver == "":
+                raise ValueError(
+                    f"skipIfInstalledVersionGreaterThan for mod '{modid}' must not be blank"
+                )
+            mod_entry["skipIfInstalledVersionGreaterThan"] = skip_ver
+
         built_variants = []
         for idx, var_data in enumerate(mod_data.get("variants", [])):
             # ---------- local file (required for hash computation) ----------

@@ -12,6 +12,7 @@ public record Mod(
         boolean required,
         Optional<String> homepage,
         Optional<String> license,
+        Optional<String> skipIfInstalledVersionGreaterThan,
         List<Variant> variants,
         ModAction action) {
 
@@ -21,8 +22,14 @@ public record Mod(
         }
         Objects.requireNonNull(homepage, "homepage");
         Objects.requireNonNull(license, "license");
+        Objects.requireNonNull(skipIfInstalledVersionGreaterThan, "skipIfInstalledVersionGreaterThan");
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(variants, "variants");
+        skipIfInstalledVersionGreaterThan.ifPresent(v -> {
+            if (v.isBlank()) {
+                throw new IllegalArgumentException("skipIfInstalledVersionGreaterThan must not be blank");
+            }
+        });
         if (variants.isEmpty() && action == ModAction.INSTALL) {
             throw new IllegalArgumentException("variants must not be empty for INSTALL");
         }
@@ -30,11 +37,22 @@ public record Mod(
     }
 
     /**
-     * Construct a Mod with default action {@link ModAction#INSTALL}.
+     * Construct a Mod with default action {@link ModAction#INSTALL}
+     * and no {@code skipIfInstalledVersionGreaterThan}.
      */
     public Mod(String name, boolean required,
                Optional<String> homepage, Optional<String> license,
                List<Variant> variants) {
-        this(name, required, homepage, license, variants, ModAction.INSTALL);
+        this(name, required, homepage, license, Optional.empty(), variants, ModAction.INSTALL);
+    }
+
+    /**
+     * Construct a Mod with an explicit {@link ModAction} but no
+     * {@code skipIfInstalledVersionGreaterThan}.
+     */
+    public Mod(String name, boolean required,
+               Optional<String> homepage, Optional<String> license,
+               List<Variant> variants, ModAction action) {
+        this(name, required, homepage, license, Optional.empty(), variants, action);
     }
 }

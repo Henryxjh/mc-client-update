@@ -14,6 +14,7 @@
     "my_private_mod": {
       "name": "My Private Mod",
       "required": true,
+      "skipIfInstalledVersionGreaterThan": "1.3.0",
       "variants": [
         {
           "selector": {

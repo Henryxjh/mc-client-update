@@ -81,6 +81,10 @@
         "license": {
           "type": "string"
         },
+        "skipIfInstalledVersionGreaterThan": {
+          "type": "string",
+          "minLength": 1
+        },
         "action": {
           "type": "string",
           "enum": ["install", "delete"],

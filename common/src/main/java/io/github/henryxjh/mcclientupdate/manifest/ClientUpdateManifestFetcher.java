@@ -242,6 +242,17 @@ public final class ClientUpdateManifestFetcher {
             }
         }
 
+        // Parse skipIfInstalledVersionGreaterThan
+        Optional<String> skipIf = Optional.empty();
+        if (modJson.skipIfInstalledVersionGreaterThan != null) {
+            String rawSkip = modJson.skipIfInstalledVersionGreaterThan.strip();
+            if (rawSkip.isBlank()) {
+                throw new ManifestFetchException(
+                        "skipIfInstalledVersionGreaterThan must not be blank");
+            }
+            skipIf = Optional.of(rawSkip);
+        }
+
         // Action-based variant handling.
         List<Variant> variants;
         if (action == ModAction.DELETE) {
@@ -267,6 +278,7 @@ public final class ClientUpdateManifestFetcher {
                 required,
                 Optional.ofNullable(homepageStr),
                 Optional.ofNullable(modJson.license).map(String::strip).filter(s -> !s.isBlank()),
+                skipIf,
                 variants,
                 action);
     }
@@ -502,6 +514,7 @@ public final class ClientUpdateManifestFetcher {
         Boolean required;
         String homepage;
         String license;
+        String skipIfInstalledVersionGreaterThan;
         String action; // install or delete (null/blank treated as INSTALL)
         List<VariantJson> variants;
     }
