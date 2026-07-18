@@ -262,7 +262,17 @@ def cmd_validate(args):
 
 FISH_COMPLETION = """\
 complete -c mcumanifest -f
-complete -c mcumanifest -n "__fish_use_subcommand" -a "init scan add-hosted add-direct add-manual remove list set-license build validate completion" -d "Subcommand"
+complete -c mcumanifest -n "__fish_use_subcommand" -a init -d "Create a new manifest workspace"
+complete -c mcumanifest -n "__fish_use_subcommand" -a scan -d "Import installed-mods.json into workspace"
+complete -c mcumanifest -n "__fish_use_subcommand" -a add-hosted -d "Add a hosted (self-served) download"
+complete -c mcumanifest -n "__fish_use_subcommand" -a add-direct -d "Add a direct-download artifact"
+complete -c mcumanifest -n "__fish_use_subcommand" -a add-manual -d "Add a manual update reference"
+complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
+complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
+complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
+complete -c mcumanifest -n "__fish_use_subcommand" -a build -d "Build the client-update-manifest.json"
+complete -c mcumanifest -n "__fish_use_subcommand" -a validate -d "Validate an existing manifest"
+complete -c mcumanifest -n "__fish_use_subcommand" -a completion -d "Generate shell completion script"
 # init
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l manifest-id -d "Manifest ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l mc -l minecraft-version -d "Minecraft version"
@@ -393,9 +403,9 @@ def main():
     # remove
     p_remove = sub.add_parser("remove", help="Remove a mod or variant")
     p_remove.add_argument("modid", help="Mod identifier")
-    p_remove.add_argument("--loader", choices=sorted(constants.SUPPORTED_LOADERS))
-    p_remove.add_argument("--os", dest="os", choices=sorted(constants.SUPPORTED_OS))
-    p_remove.add_argument("--arch", dest="arch", choices=sorted(constants.SUPPORTED_ARCH))
+    p_remove.add_argument("--loader", choices=sorted(constants.SUPPORTED_LOADERS), help="Mod loader")
+    p_remove.add_argument("--os", dest="os", choices=sorted(constants.SUPPORTED_OS), help="Operating system")
+    p_remove.add_argument("--arch", dest="arch", choices=sorted(constants.SUPPORTED_ARCH), help="CPU architecture")
 
     # list
     sub.add_parser("list", help="List mods in workspace")

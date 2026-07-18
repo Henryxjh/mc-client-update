@@ -63,6 +63,12 @@ def test_fish_completion_contains_loongarch64(runner):
     assert '-d "Base URL for hosted mods"' in result.stdout
     assert '-d "Fail if variant already exists"' in result.stdout
 
+    # subcommand descriptions in completion
+    assert "Create a new manifest workspace" in result.stdout
+    assert "Add a direct-download artifact" in result.stdout
+    assert "Remove a mod or variant" in result.stdout
+    assert "Generate shell completion script" in result.stdout
+
 
 def test_direct_rejects_relative_url(tmp_path, runner):
     ws_file = tmp_path / "test-ws.json"
