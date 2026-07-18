@@ -47,6 +47,18 @@
       "additionalProperties": {
         "$ref": "#/$defs/mod"
       }
+    },
+    "minimumLoaderVersions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "enum": ["fabric", "neoforge", "forge"]
+      }
     }
   },
   "$defs": {
@@ -109,7 +121,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": {
-            "enum": ["fabric", "neoforge"]
+            "enum": ["fabric", "neoforge", "forge"]
           }
         },
         "operatingSystems": {

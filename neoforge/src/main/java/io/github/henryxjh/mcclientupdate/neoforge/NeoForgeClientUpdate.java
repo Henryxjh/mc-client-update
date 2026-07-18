@@ -62,6 +62,16 @@ public final class NeoForgeClientUpdate {
                 }
                 return List.copyOf(result);
             }
+
+            @Override
+            public String loaderVersion() {
+                for (IModInfo info : ModList.get().getMods()) {
+                    if ("neoforge".equals(info.getModId())) {
+                        return info.getVersion().toString();
+                    }
+                }
+                return "0.0.0";
+            }
         });
     }
 }

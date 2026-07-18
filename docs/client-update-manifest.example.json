@@ -7,6 +7,9 @@
   "expiresAt": "2026-07-24T12:00:00Z",
   "minecraftVersion": "1.21.1",
   "baseUrl": "https://updates.example.invalid/client/1.21.1/",
+  "minimumLoaderVersions": {
+    "fabric": "0.16.0"
+  },
   "mods": {
     "my_private_mod": {
       "name": "My Private Mod",

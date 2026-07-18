@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -788,5 +789,228 @@ class ClientUpdateManifestFetcherTest {
         Mod mod = m.mods().get("has");
         assertNotNull(mod);
         assertEquals(ModAction.INSTALL, mod.action());
+    }
+
+    @Test
+    void shouldAcceptMinimumLoaderVersions() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "with-min-loader",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "minimumLoaderVersions": { "fabric": "0.14.0" },
+                  "mods": {
+                    "ml": {
+                      "name": "MinLoaderMod",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {
+                            "loaders": ["fabric"]
+                          },
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "min.jar",
+                            "size": 10,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "min.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        Manifest m = fetch();
+        Mod mod = m.mods().get("ml");
+        assertNotNull(mod);
+        assertTrue(m.minimumLoaderVersions().isPresent());
+        assertEquals("0.14.0", m.minimumLoaderVersions().get().get("fabric"));
+    }
+
+    @Test
+    void shouldRejectUnknownLoaderInMinimumLoaderVersions() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "unknown-loader",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "minimumLoaderVersions": { "quilt": "1.0" },
+                  "mods": {
+                    "ul": {
+                      "name": "UnknownLoaderMod",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {
+                            "loaders": ["fabric"]
+                          },
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "ul.jar",
+                            "size": 10,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "ul.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("unknown loader"),
+                "should mention unknown loader");
+    }
+
+    @Test
+    void shouldRejectEmptyMinimumLoaderVersionsObject() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "empty-min-ver",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "minimumLoaderVersions": {},
+                  "mods": {
+                    "ev": {
+                      "name": "EmptyVer",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {
+                            "loaders": ["fabric"]
+                          },
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "ev.jar",
+                            "size": 10,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "ev.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("minimumloaderversions"),
+                "should complain about empty minimumLoaderVersions");
+    }
+
+    @Test
+    void shouldRejectMultipleLoaderVersions() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "multi-loader",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "minimumLoaderVersions": { "fabric": "0.16.0", "neoforge": "21.1.0" },
+                  "mods": {
+                    "ml": {
+                      "name": "MultiLoaderMod",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {},
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "m.jar",
+                            "size": 1,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "m.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("exactly one"),
+                "Should reject multiple loader versions");
+    }
+
+    @Test
+    void shouldAcceptForgeLoaderKey() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "forge-loader",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "minimumLoaderVersions": { "forge": "43.2.0" },
+                  "mods": {
+                    "fl": {
+                      "name": "ForgeLoad",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {},
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "f.jar",
+                            "size": 1,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "f.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        Manifest m = fetch();
+        assertTrue(m.minimumLoaderVersions().isPresent());
+        assertEquals("43.2.0", m.minimumLoaderVersions().get().get("forge"));
+    }
+
+    @Test
+    void shouldAcceptForgeInSelectorLoader() {
+        String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String body = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "forge-in-selector",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "fis": {
+                      "name": "ForgeInSel",
+                      "required": false,
+                      "variants": [
+                        {
+                          "selector": { "loaders": ["forge"] },
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "fis.jar",
+                            "size": 1,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "fis.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(time);
+        respond(HTTP_OK, body);
+        Manifest m = fetch();
+        assertEquals("forge-in-selector", m.manifestId());
+        assertEquals(1, m.modCount());
     }
 }

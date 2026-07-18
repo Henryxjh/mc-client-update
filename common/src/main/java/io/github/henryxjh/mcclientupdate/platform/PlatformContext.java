@@ -14,4 +14,6 @@ public interface PlatformContext {
     void log(String message);
 
     List<InstalledMod> installedMods();
+
+    String loaderVersion();
 }

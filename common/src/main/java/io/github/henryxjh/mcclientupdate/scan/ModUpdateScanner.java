@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Locale;
 
 /**
  * Determines which manifest‑declared mods need to be downloaded/replaced.
@@ -54,6 +55,25 @@ public final class ModUpdateScanner {
             realModsDir = normalizedModsDir.toRealPath();
         } catch (IOException e) {
             throw new ModScanException("Unable to resolve real path of mods directory", e);
+        }
+
+        // Verify minimum loader version constraint (top level)
+        if (manifest.minimumLoaderVersions().isPresent()) {
+            Map<String, String> minVers = manifest.minimumLoaderVersions().get();
+            if (!minVers.containsKey(target.loader())) {
+                throw new ModScanException(
+                        "Manifest minimumLoaderVersions does not include current loader "
+                                + target.loader() + "; manifest requires one of "
+                                + minVers.keySet());
+            }
+            String required = minVers.get(target.loader());
+            String current = target.loaderVersion();
+            if (compareVersions(current, required) < 0) {
+                throw new ModScanException(
+                        "Current loader version " + current
+                                + " is below required minimum " + required
+                                + " for loader " + target.loader());
+            }
         }
 
         // Process manifest mods in stable order
@@ -283,6 +303,69 @@ public final class ModUpdateScanner {
             }
         }
         return true;
+    }
+
+    private static int compareVersions(String a, String b) {
+        String[] aParts = splitVersion(a);
+        String[] bParts = splitVersion(b);
+
+        int maxLen = Math.max(aParts.length, bParts.length);
+        for (int i = 0; i < maxLen; i++) {
+            String aPart = i < aParts.length ? aParts[i] : null;
+            String bPart = i < bParts.length ? bParts[i] : null;
+            int cmp = compareSegment(aPart, bPart);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return 0;
+    }
+
+    private static String[] splitVersion(String version) {
+        return version.split("[._\\-+]");
+    }
+
+    private static int compareSegment(String aSeg, String bSeg) {
+        if (aSeg == null && bSeg == null) {
+            return 0;
+        }
+        if (aSeg == null) {
+            return compareMissingWith(bSeg);
+        }
+        if (bSeg == null) {
+            return -compareMissingWith(aSeg);
+        }
+        boolean aIsNum = isNumeric(aSeg);
+        boolean bIsNum = isNumeric(bSeg);
+        if (aIsNum && bIsNum) {
+            long aVal = Long.parseLong(aSeg);
+            long bVal = Long.parseLong(bSeg);
+            return Long.compare(aVal, bVal);
+        }
+        String aLower = aSeg.toLowerCase(Locale.ROOT);
+        String bLower = bSeg.toLowerCase(Locale.ROOT);
+        return aLower.compareTo(bLower);
+    }
+
+    private static int compareMissingWith(String seg) {
+        if (isNumeric(seg)) {
+            long val = Long.parseLong(seg);
+            return Long.compare(0L, val);
+        }
+        String segLower = seg.toLowerCase(Locale.ROOT);
+        return "0".compareTo(segLower);
+    }
+
+    private static boolean isNumeric(String s) {
+        if (s.isEmpty()) {
+            return true;
+        }
+        try {
+            Long.parseLong(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private static int specificity(Variant variant) {

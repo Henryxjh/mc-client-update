@@ -17,8 +17,8 @@ public record Selector(
         Objects.requireNonNull(loaders, "loaders");
         Objects.requireNonNull(operatingSystems, "operatingSystems");
         Objects.requireNonNull(architectures, "architectures");
-        loaders = loaders.map(list -> List.copyOf(list));
-        operatingSystems = operatingSystems.map(list -> List.copyOf(list));
-        architectures = architectures.map(list -> List.copyOf(list));
+        loaders = loaders.map(List::copyOf);
+        operatingSystems = operatingSystems.map(List::copyOf);
+        architectures = architectures.map(List::copyOf);
     }
 }

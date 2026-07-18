@@ -1,5 +1,10 @@
 package io.github.henryxjh.mcclientupdate;
 
+import java.net.URI;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
+
 import io.github.henryxjh.mcclientupdate.config.ClientUpdateConfig;
 import io.github.henryxjh.mcclientupdate.download.ArtifactDownloader;
 import io.github.henryxjh.mcclientupdate.download.DownloadBatchResult;
@@ -18,15 +23,11 @@ import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.scan.ModUpdateScanner;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
+import io.github.henryxjh.mcclientupdate.ui.UpdateAttentionDialog;
 import io.github.henryxjh.mcclientupdate.update.install.ArtifactInstaller;
 import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
 import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
 import io.github.henryxjh.mcclientupdate.update.install.InstalledArtifact;
-
-import java.net.URI;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Objects;
 
 public final class ClientUpdateBootstrap {
 
@@ -143,6 +144,16 @@ public final class ClientUpdateBootstrap {
         }
 
         DownloadReportWriter.writeFullReport(batchResult, installResult, platform.gameDirectory());
+
+        try {
+            UpdateAttentionDialog.showIfNeeded(
+                    batchResult.manualUpdates(),
+                    batchResult.failed(),
+                    installResult.failures(),
+                    platform);
+        } catch (LinkageError | RuntimeException e) {
+            platform.log("Swing dialog not available: " + e.toString());
+        }
 
         boolean anyInstalled = !installResult.installed().isEmpty();
         boolean anyFailureOrManual = !batchResult.failed().isEmpty()

@@ -41,7 +41,8 @@ public final class ClientUpdateManifestFetcher {
 
     private static final Pattern MOD_ID_PATTERN = Pattern.compile("^[a-z][a-z0-9_-]{1,63}$");
 
-    private static final Set<String> ALLOWED_LOADERS = Set.of("fabric", "neoforge");
+    private static final Set<String> ALLOWED_LOADERS = Set.of("fabric", "neoforge", "forge");
+    private static final Set<String> ALLOWED_MINIMUM_LOADER_IDS = Set.of("fabric", "neoforge", "forge");
     private static final Set<String> ALLOWED_OS = Set.of("android", "windows", "linux", "macos");
     private static final Set<String> ALLOWED_ARCH = Set.of("x86_64", "x86_32", "aarch64", "arm32", "riscv64", "loongarch64");
     private static final Set<String> ALLOWED_PROVIDERS = Set.of("modrinth", "curseforge", "github", "other");
@@ -178,6 +179,8 @@ public final class ClientUpdateManifestFetcher {
             }
         }
 
+        Optional<Map<String, String>> topMinVersions = parseTopMinimumLoaderVersions(json.minimumLoaderVersions);
+
         Map<String, Mod> mods = modsJson.entrySet().stream()
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
@@ -191,7 +194,8 @@ public final class ClientUpdateManifestFetcher {
                 Optional.ofNullable(expiresInstant),
                 minecraftVersion.strip(),
                 Optional.ofNullable(json.baseUrl).map(String::strip).filter(s -> !s.isBlank()),
-                mods);
+                mods,
+                topMinVersions);
     }
 
     private static Mod convertMod(ModJson modJson) {
@@ -450,6 +454,34 @@ public final class ClientUpdateManifestFetcher {
         return s.isBlank() ? Optional.empty() : Optional.of(s);
     }
 
+    private static Optional<Map<String, String>> parseTopMinimumLoaderVersions(
+            Map<String, String> raw) {
+        if (raw == null) {
+            return Optional.empty();
+        }
+        if (raw.size() != 1) {
+            throw new ManifestFetchException(
+                    "minimumLoaderVersions must contain exactly one entry");
+        }
+        Map.Entry<String, String> soleEntry = raw.entrySet().iterator().next();
+        String key = soleEntry.getKey();
+        if (key == null || key.strip().isEmpty()) {
+            throw new ManifestFetchException(
+                    "minimumLoaderVersions must not contain a blank loader key");
+        }
+        String loaderId = key.strip().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_MINIMUM_LOADER_IDS.contains(loaderId)) {
+            throw new ManifestFetchException(
+                    "Unknown loader in minimumLoaderVersions: " + key);
+        }
+        String value = soleEntry.getValue();
+        if (value == null || value.strip().isEmpty()) {
+            throw new ManifestFetchException(
+                    "minimumLoaderVersions value for \"" + loaderId + "\" must not be blank");
+        }
+        return Optional.of(Map.of(loaderId, value.strip()));
+    }
+
     // --------------- JSON mapping classes ---------------
 
     private static final class ManifestJson {
@@ -462,6 +494,7 @@ public final class ClientUpdateManifestFetcher {
         String minecraftVersion;
         String baseUrl;
         Map<String, ModJson> mods;
+        Map<String, String> minimumLoaderVersions;
     }
 
     private static final class ModJson {

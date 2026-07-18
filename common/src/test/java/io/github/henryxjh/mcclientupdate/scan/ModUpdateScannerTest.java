@@ -489,4 +489,164 @@ class ModUpdateScannerTest {
         ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
         assertTrue(result.candidates().isEmpty());
     }
+
+    // ---- minimum loader version tests (top-level) ----
+
+    private UpdateTarget targetWithLoaderVersion(String loader, String version) {
+        return new UpdateTarget(loader,
+                new RuntimePlatform(OperatingSystem.LINUX, CpuArchitecture.X86_64,
+                        "Linux", "5.15.0-70-generic", "amd64"),
+                version);
+    }
+
+    @Test
+    void minimumLoaderVersionPassesWhenCurrentExceedsMinimum() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("fabric")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-min", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("fabric", "0.15.0")));
+        UpdateTarget target = targetWithLoaderVersion("fabric", "0.16.0");
+        ScanResult result = ModUpdateScanner.scan(manifest, target, modsDir, List.of());
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.MISSING_REQUIRED, result.candidates().get(0).reason());
+    }
+
+    @Test
+    void minimumLoaderVersionFailsLowerCurrent() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("fabric")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-min", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("fabric", "0.16.0")));
+        UpdateTarget target = targetWithLoaderVersion("fabric", "0.14.0");
+        assertThrows(ModScanException.class,
+                () -> ModUpdateScanner.scan(manifest, target, modsDir, List.of()));
+    }
+
+    @Test
+    void minimumLoaderVersionAbsentCurrentLoaderKeyCausesNoMatch() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("fabric")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-min", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("neoforge", "1.0")));
+        UpdateTarget target = targetWithLoaderVersion("fabric", "1.0");
+        assertThrows(ModScanException.class,
+                () -> ModUpdateScanner.scan(manifest, target, modsDir, List.of()));
+    }
+
+    @Test
+    void minimumLoaderVersionEqualCurrentPasses() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("fabric")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-min", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("fabric", "0.16.0")));
+        UpdateTarget target = targetWithLoaderVersion("fabric", "0.16.0");
+        ScanResult result = ModUpdateScanner.scan(manifest, target, modsDir, List.of());
+        assertEquals(1, result.candidates().size());
+    }
+
+    @Test
+    void minimumLoaderVersionMultiDigitPass() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("neoforge")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-multidigit", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("neoforge", "21.1.100")));
+        UpdateTarget target = new UpdateTarget("neoforge",
+                new RuntimePlatform(OperatingSystem.LINUX, CpuArchitecture.X86_64,
+                        "Linux", "5.15.0-70-generic", "amd64"),
+                "21.1.100");
+        ScanResult result = ModUpdateScanner.scan(manifest, target, modsDir, List.of());
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.MISSING_REQUIRED, result.candidates().get(0).reason());
+    }
+
+    @Test
+    void minimumLoaderVersionMultiDigitFailLower() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Selector sel = new Selector(Optional.of(List.of("neoforge")),
+                Optional.empty(), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = new Manifest(1, "test-multidigit", 1L, Instant.now(),
+                Optional.empty(), "1.21.1", Optional.empty(),
+                Map.of("mymod", mod),
+                Optional.of(Map.of("neoforge", "21.1.100")));
+        UpdateTarget target = new UpdateTarget("neoforge",
+                new RuntimePlatform(OperatingSystem.LINUX, CpuArchitecture.X86_64,
+                        "Linux", "5.15.0-70-generic", "amd64"),
+                "21.1.99");
+        assertThrows(ModScanException.class,
+                () -> ModUpdateScanner.scan(manifest, target, modsDir, List.of()));
+    }
+
+    @Test
+    void forgeSelectorMatchesForgeTarget() throws Exception {
+        Path modsDir = modsDir();
+        UpdateTarget target = new UpdateTarget("forge",
+                new RuntimePlatform(OperatingSystem.LINUX, CpuArchitecture.X86_64,
+                        "Linux", "5.15.0-70-generic", "amd64"));
+        Selector sel = new Selector(Optional.of(List.of("forge")),
+                Optional.empty(), Optional.empty());
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        ScanResult result = ModUpdateScanner.scan(manifest, target, modsDir, List.of());
+        assertEquals(1, result.candidates().size());
+        assertEquals("mymod", result.candidates().get(0).modId());
+    }
+
+    @Test
+    void forgeSelectorDoesNotMatchNeoforgeTarget() throws IOException {
+        Path modsDir = modsDir();
+        UpdateTarget target = new UpdateTarget("neoforge",
+                new RuntimePlatform(OperatingSystem.LINUX, CpuArchitecture.X86_64,
+                        "Linux", "5.15.0-70-generic", "amd64"));
+        Selector sel = new Selector(Optional.of(List.of("forge")),
+                Optional.empty(), Optional.empty());
+        Artifact art = artifact("1.0", 10,
+                Optional.of("a".repeat(64)), Optional.empty());
+        Variant var = variant(0, sel, art);
+        Mod mod = manifestMod("mymod", true, List.of(var));
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        assertThrows(ModScanException.class,
+                () -> ModUpdateScanner.scan(manifest, target, modsDir, List.of()));
+    }
 }

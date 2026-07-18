@@ -69,6 +69,14 @@ public final class FabricClientUpdate implements ModInitializer {
                 }
                 return List.copyOf(mods);
             }
+
+            @Override
+            public String loaderVersion() {
+                return FabricLoader.getInstance()
+                        .getModContainer("fabricloader")
+                        .map(mc -> mc.getMetadata().getVersion().getFriendlyString())
+                        .orElseThrow(() -> new ModScanException("Fabric Loader not found"));
+            }
         });
     }
 }
