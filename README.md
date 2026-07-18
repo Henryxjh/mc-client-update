@@ -23,15 +23,16 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
 - 运行平台检测，能够区分桌面 Linux 与将 `os.name` 报告为 Linux 的 Android JVM；
 - 稳定的下载目标标识，例如 `fabric-windows-x86_64` 和 `neoforge-android-aarch64`。
 - 从配置的 `manifestUrl` 拉取更新清单并执行完整的 schema 及语义验证（包括版本、时间戳、过期、必需字段、modid 格式、选择器枚举、下载类型等）。
-- **已实现** Mod 扫描及 variant 匹配，已下载到暂存区（`.mc-client-update/downloads/sha512-<HASH>/<fileName>` 或 `sha256-<HASH>/<fileName>`），但尚未安装到 mods 目录。
+- **已实现** Mod 扫描及 variant 匹配，已下载到暂存区（`.mc-client-update/downloads/sha512-<HASH>/<fileName>` 或 `sha256-<HASH>/<fileName>`），并在下载完成后安装到 mods 目录。
 
-**已实现** 根据更新候选下载 artifact 并写入报告：
+**已实现** 根据更新候选下载 artifact **并安装到游戏目录**：
   - 三种下载方式：`hosted`（相对 URL 可使用 `baseUrl` 或 manifest URI 解析）、`direct`（绝对直链）、`manual`（不自动下载，仅记录）。
   - 相同 artifact 的多个候选去重后只下载一次，结果中保留所有关联的 modId。
   - 下载缓存于 `.mc-client-update/downloads/<sha512-/sha256-HASH>/<fileName>`，命中后跳过网络。
   - 下载失败不中断其他 artifact，InterruptedException 会安全停止后续下载。
   - 每次扫描结束后自动写入 `config/mc-client-update-download-report.json`（原子覆盖），包含成功、失败和手动更新的细节。
-  - 下载完成后 **不安装 JAR 到 mods 目录**，也不触发重启。
+  - **安装阶段已完成**：通过 `ArtifactInstaller` 把下载的文件放入 mods 目录；`HASH_MISMATCH` 使用 `JarTransaction` 替换现有 JAR；`MISSING_REQUIRED` 在不存在冲突时新增 JAR；冲突、校验失败及 `InterruptedException` 均记录到报告且不会中断后续安装。
+  - 安装成功后抛出 `RestartRequiredException` 提示重启；有下载/手动/安装失败但没有安装成功时阻止继续启动。
 
 ## 平台目标
 

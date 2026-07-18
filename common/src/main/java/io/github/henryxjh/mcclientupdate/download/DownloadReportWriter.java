@@ -2,6 +2,9 @@ package io.github.henryxjh.mcclientupdate.download;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
+import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
+import io.github.henryxjh.mcclientupdate.update.install.InstalledArtifact;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -47,7 +50,52 @@ public final class DownloadReportWriter {
                 result.revision(),
                 toDownloadedJsons(result.downloaded()),
                 toFailedJsons(result.failed()),
-                toManualJsons(result.manualUpdates()));
+                toManualJsons(result.manualUpdates()),
+                List.of(),
+                List.of());
+
+        try {
+            String json = GSON.toJson(report);
+            Files.writeString(tmpPath, json, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            try {
+                Files.move(tmpPath, configPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException notAtomic) {
+                Files.move(tmpPath, configPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmpPath);
+            } catch (IOException ignored) { }
+            throw new DownloadException("Failed to write download report to " + configPath, e);
+        }
+    }
+
+    public static void writeFullReport(DownloadBatchResult downloadResult,
+                                       InstallBatchResult installResult,
+                                       Path gameDirectory) {
+        Objects.requireNonNull(downloadResult, "downloadResult");
+        Objects.requireNonNull(installResult, "installResult");
+        Objects.requireNonNull(gameDirectory, "gameDirectory");
+
+        Path configDir = gameDirectory.resolve("config");
+        try {
+            Files.createDirectories(configDir);
+        } catch (IOException e) {
+            throw new DownloadException("Failed to create config directory " + configDir, e);
+        }
+        Path configPath = configDir.resolve(REPORT_FILE_NAME);
+        Path tmpPath = configDir.resolve(REPORT_FILE_NAME + TEMP_SUFFIX + "." + System.nanoTime());
+
+        ReportJson report = new ReportJson(
+                Instant.now(),
+                downloadResult.manifestId(),
+                downloadResult.revision(),
+                toDownloadedJsons(downloadResult.downloaded()),
+                toFailedJsons(downloadResult.failed()),
+                toManualJsons(downloadResult.manualUpdates()),
+                toInstalledJsons(installResult.installed()),
+                toInstallFailureJsons(installResult.failures()));
 
         try {
             String json = GSON.toJson(report);
@@ -73,6 +121,8 @@ public final class DownloadReportWriter {
         List<DownloadedJson> downloaded;
         List<FailedJson> failed;
         List<ManualJson> manualUpdates;
+        List<InstalledJson> installed;
+        List<InstallFailedJson> installFailures;
 
         ReportJson(
                 Instant generatedAt,
@@ -80,13 +130,17 @@ public final class DownloadReportWriter {
                 long revision,
                 List<DownloadedJson> downloaded,
                 List<FailedJson> failed,
-                List<ManualJson> manualUpdates) {
+                List<ManualJson> manualUpdates,
+                List<InstalledJson> installed,
+                List<InstallFailedJson> installFailures) {
             this.generatedAt = DateTimeFormatter.ISO_INSTANT.format(generatedAt.atOffset(ZoneOffset.UTC));
             this.manifestId = manifestId;
             this.revision = revision;
             this.downloaded = downloaded;
             this.failed = failed;
             this.manualUpdates = manualUpdates;
+            this.installed = installed;
+            this.installFailures = installFailures;
         }
     }
 
@@ -143,6 +197,44 @@ public final class DownloadReportWriter {
         }
     }
 
+    private static final class InstalledJson {
+        List<String> modIds;
+        String fileName;
+        String version;
+        String sourceType;
+        String action;
+        String installedRelativePath;
+        String backupRelativePath;
+
+        InstalledJson(InstalledArtifact a) {
+            modIds = a.modIds();
+            fileName = a.fileName();
+            version = a.version();
+            sourceType = a.sourceType();
+            action = a.action();
+            installedRelativePath = a.installedRelativePath();
+            backupRelativePath = a.backupRelativePath().orElse(null);
+        }
+    }
+
+    private static final class InstallFailedJson {
+        List<String> modIds;
+        String fileName;
+        String version;
+        String sourceType;
+        String category;
+        String message;
+
+        InstallFailedJson(InstallFailure f) {
+            modIds = f.modIds();
+            fileName = f.fileName();
+            version = f.version();
+            sourceType = f.sourceType();
+            category = f.category().name();
+            message = f.message();
+        }
+    }
+
     private static List<DownloadedJson> toDownloadedJsons(List<DownloadedArtifact> items) {
         return items.stream().map(DownloadedJson::new).collect(Collectors.toList());
     }
@@ -153,5 +245,13 @@ public final class DownloadReportWriter {
 
     private static List<ManualJson> toManualJsons(List<ManualUpdate> items) {
         return items.stream().map(ManualJson::new).collect(Collectors.toList());
+    }
+
+    private static List<InstalledJson> toInstalledJsons(List<InstalledArtifact> items) {
+        return items.stream().map(InstalledJson::new).collect(Collectors.toList());
+    }
+
+    private static List<InstallFailedJson> toInstallFailureJsons(List<InstallFailure> items) {
+        return items.stream().map(InstallFailedJson::new).collect(Collectors.toList());
     }
 }

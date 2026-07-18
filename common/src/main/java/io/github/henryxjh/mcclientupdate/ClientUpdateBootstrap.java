@@ -18,6 +18,10 @@ import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.scan.ModUpdateScanner;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
+import io.github.henryxjh.mcclientupdate.update.install.ArtifactInstaller;
+import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
+import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
+import io.github.henryxjh.mcclientupdate.update.install.InstalledArtifact;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -81,33 +85,71 @@ public final class ClientUpdateBootstrap {
                     + " targetVersion=" + candidate.selectedVariant().artifact().version());
         }
 
+        DownloadBatchResult batchResult;
         try {
             URI manifestUri = config.manifestUri().orElseThrow();
-            DownloadBatchResult batchResult = ArtifactDownloader.downloadBatch(
+            batchResult = ArtifactDownloader.downloadBatch(
                     manifest, manifestUri, scanResult, platform.gameDirectory(),
                     config.connectTimeout(), config.readTimeout());
-
-            platform.log("Downloaded: " + batchResult.downloaded().size()
-                    + " failed: " + batchResult.failed().size()
-                    + " manual: " + batchResult.manualUpdates().size());
-            for (DownloadedArtifact downloaded : batchResult.downloaded()) {
-                platform.log("  downloaded " + downloaded.fileName() + " modIds=" + downloaded.modIds());
-            }
-            for (DownloadFailure failure : batchResult.failed()) {
-                platform.log("  FAILED " + failure.fileName() + " modIds=" + failure.modIds()
-                        + " category=" + failure.category() + " message=" + failure.message());
-            }
-            for (ManualUpdate manual : batchResult.manualUpdates()) {
-                platform.log("  MANUAL " + manual.fileName() + " modIds=" + manual.modIds()
-                        + " pageUrl=" + manual.pageUrl() + " msg=" + manual.message());
-            }
-            DownloadReportWriter.writeReport(batchResult, platform.gameDirectory());
         } catch (Exception e) {
             platform.log("Download phase failed: " + e.getMessage());
             if (e instanceof RuntimeException) {
                 throw (RuntimeException) e;
             }
             throw new DownloadException("Download phase failed", e);
+        }
+
+        platform.log("Downloaded: " + batchResult.downloaded().size()
+                + " failed: " + batchResult.failed().size()
+                + " manual: " + batchResult.manualUpdates().size());
+        for (DownloadedArtifact downloaded : batchResult.downloaded()) {
+            platform.log("  downloaded " + downloaded.fileName() + " modIds=" + downloaded.modIds());
+        }
+        for (DownloadFailure failure : batchResult.failed()) {
+            platform.log("  FAILED " + failure.fileName() + " modIds=" + failure.modIds()
+                    + " category=" + failure.category() + " message=" + failure.message());
+        }
+        for (ManualUpdate manual : batchResult.manualUpdates()) {
+            platform.log("  MANUAL " + manual.fileName() + " modIds=" + manual.modIds()
+                    + " pageUrl=" + manual.pageUrl() + " msg=" + manual.message());
+        }
+
+        InstallBatchResult installResult;
+        try {
+            installResult = ArtifactInstaller.installBatch(manifest, scanResult, batchResult, platform.gameDirectory());
+        } catch (Exception e) {
+            platform.log("Install phase failed: " + e.getMessage());
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            throw new DownloadException("Install phase failed", e);
+        }
+
+        platform.log("Installed: " + installResult.installed().size()
+                + " failed: " + installResult.failures().size());
+        for (InstalledArtifact installed : installResult.installed()) {
+            platform.log("  installed " + installed.fileName() + " modIds=" + installed.modIds()
+                    + " action=" + installed.action() + " path=" + installed.installedRelativePath());
+        }
+        for (InstallFailure failure : installResult.failures()) {
+            platform.log("  INSTALL FAILED " + failure.fileName() + " modIds=" + failure.modIds()
+                    + " category=" + failure.category() + " message=" + failure.message());
+        }
+
+        DownloadReportWriter.writeFullReport(batchResult, installResult, platform.gameDirectory());
+
+        boolean anyInstalled = !installResult.installed().isEmpty();
+        boolean anyFailureOrManual = !batchResult.failed().isEmpty()
+                || !batchResult.manualUpdates().isEmpty()
+                || !installResult.failures().isEmpty();
+
+        if (!anyInstalled && anyFailureOrManual) {
+            throw new DownloadException("No updates installed and there are failures/manual updates");
+        }
+
+        if (anyInstalled) {
+            platform.log("Installation succeeded; restart required.");
+            throw new RestartRequiredException("Restart required to complete update");
         }
     }
 }
