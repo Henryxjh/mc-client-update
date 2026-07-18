@@ -33,7 +33,9 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
   - 每次扫描结束后自动写入 `config/mc-client-update-download-report.json`（原子覆盖），包含成功、失败和手动更新的细节。
   - **安装阶段已完成**：通过 `ArtifactInstaller` 把下载的文件放入 mods 目录；`HASH_MISMATCH` 使用 `JarTransaction` 替换现有 JAR；`MISSING_REQUIRED` 在不存在冲突时新增 JAR；冲突、校验失败及 `InterruptedException` 均记录到报告且不会中断后续安装。
   - 安装成功后抛出 `RestartRequiredException` 提示重启；有下载/手动/安装失败但没有安装成功时阻止继续启动。
-  - 若有手动安装/下载失败/安装失败，退出前 Swing 弹窗提示，关闭后游戏继续退出，避免半更新状态。
+  - 若有手动安装、下载失败、安装失败或安装成功，退出前 Swing 弹窗提示列出条目，关闭后游戏继续退出，避免半更新状态。
+  - 提醒文本始终由无 Swing 依赖的 `UpdateAttentionMessage` 生成并写入游戏日志，Swing 不可用时日志依然完整。
+  - 抛出的 `RestartRequiredException` 和 `DownloadException` 消息也包含相同的提醒文本，供启动器展示。
 
 ## 平台目标
 

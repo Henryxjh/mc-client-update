@@ -24,6 +24,7 @@ import io.github.henryxjh.mcclientupdate.scan.ModUpdateScanner;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
 import io.github.henryxjh.mcclientupdate.ui.UpdateAttentionDialog;
+import io.github.henryxjh.mcclientupdate.ui.UpdateAttentionMessage;
 import io.github.henryxjh.mcclientupdate.update.install.ArtifactInstaller;
 import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
 import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
@@ -145,14 +146,20 @@ public final class ClientUpdateBootstrap {
 
         DownloadReportWriter.writeFullReport(batchResult, installResult, platform.gameDirectory());
 
+        String attentionText = UpdateAttentionMessage.formatMessage(
+                batchResult.manualUpdates(),
+                batchResult.failed(),
+                installResult.failures(),
+                installResult.installed());
+
+        // Always write attention text to game log (no Swing dependency)
+        UpdateAttentionMessage.logToGameLog(attentionText, platform);
+
+        // Attempt to show Swing dialog (catches own exceptions internally)
         try {
-            UpdateAttentionDialog.showIfNeeded(
-                    batchResult.manualUpdates(),
-                    batchResult.failed(),
-                    installResult.failures(),
-                    platform);
+            UpdateAttentionDialog.showTextIfNeeded(attentionText, platform);
         } catch (LinkageError | RuntimeException e) {
-            platform.log("Swing dialog not available: " + e.toString());
+            platform.log("Unable to show update attention dialog: " + e);
         }
 
         boolean anyInstalled = !installResult.installed().isEmpty();
@@ -160,13 +167,13 @@ public final class ClientUpdateBootstrap {
                 || !batchResult.manualUpdates().isEmpty()
                 || !installResult.failures().isEmpty();
 
-        if (!anyInstalled && anyFailureOrManual) {
-            throw new DownloadException("No updates installed and there are failures/manual updates");
-        }
-
         if (anyInstalled) {
             platform.log("Installation succeeded; restart required.");
-            throw new RestartRequiredException("Restart required to complete update");
+            throw new RestartRequiredException(
+                    UpdateAttentionMessage.restartRequiredMessage(attentionText));
+        } else if (anyFailureOrManual) {
+            throw new DownloadException(
+                    UpdateAttentionMessage.downloadFailureMessage(attentionText));
         }
     }
 }
