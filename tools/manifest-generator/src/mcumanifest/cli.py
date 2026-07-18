@@ -266,40 +266,40 @@ complete -c mcumanifest -n "__fish_use_subcommand" -a "init scan add-hosted add-
 # init
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l manifest-id -d "Manifest ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l mc -l minecraft-version -d "Minecraft version"
-complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l loader -r -a "fabric neoforge forge"
-complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l base-url
-complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l force
+complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l loader -r -a "fabric neoforge forge" -d "Mod loader"
+complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l base-url -d "Base URL for hosted mods"
+complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l force -d "Force overwrite existing workspace without asking"
 # generic for add/remove
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l file -r -F
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l file -r -F -d "Local JAR file path"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l version -d "Version string"
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l loader -r -a "fabric neoforge forge"
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l os -r -a "android windows linux macos"
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l arch -r -a "x86_64 x86_32 aarch64 arm32 riscv64 loongarch64"
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l force
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l no-overwrite
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l loader -r -a "fabric neoforge forge" -d "Mod loader"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l os -r -a "android windows linux macos" -d "Operating system"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l arch -r -a "x86_64 x86_32 aarch64 arm32 riscv64 loongarch64" -d "CPU architecture"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l force -d "Force overwrite existing variant"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted add-direct add-manual" -l no-overwrite -d "Fail if variant already exists"
 # add-specific URL/page-url
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted" -l url -r
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l url -r
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l provider -r -a "modrinth curseforge github other"
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l project-id -r
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l version-id -r
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l page-url -r
-complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l message -r
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted" -l url -r -d "Download URL"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l url -r -d "Download URL"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l provider -r -a "modrinth curseforge github other" -d "Provider name"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l project-id -r -d "Project ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l version-id -r -d "Version ID on provider"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l page-url -r -d "Page URL for manual download"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l message -r -d "Extra message for manual update"
 # remove
-complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l loader -r -a "fabric neoforge forge"
-complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l os -r -a "android windows linux macos"
-complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l arch -r -a "x86_64 x86_32 aarch64 arm32 riscv64 loongarch64"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l loader -r -a "fabric neoforge forge" -d "Mod loader"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l os -r -a "android windows linux macos" -d "Operating system"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l arch -r -a "x86_64 x86_32 aarch64 arm32 riscv64 loongarch64" -d "CPU architecture"
 # scan
-complete -c mcumanifest -n "__fish_seen_subcommand_from scan" -l input -r -F
+complete -c mcumanifest -n "__fish_seen_subcommand_from scan" -l input -r -F -d "Path to installed-mods.json"
 # set-license
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l license -d "License identifier"
-complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l allow-redistribution
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l allow-redistribution -d "Mark as redistribution allowed"
 # build / validate
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l output -r -d "Output path"
-complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l schema -r -F
+complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l schema -r -F -d "Path to JSON Schema file"
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l base-url -r -d "Override base URL in manifest"
-complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l manifest -r -F
-complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l schema -r -F
+complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l manifest -r -F -d "Path to manifest JSON for validation"
+complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l schema -r -F -d "Path to JSON Schema file"
 """
 
 

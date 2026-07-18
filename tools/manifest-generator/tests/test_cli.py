@@ -55,6 +55,13 @@ def test_fish_completion_contains_loongarch64(runner):
     assert "complete" in result.stdout
     # arch enumeration includes loongarch64
     assert "loongarch64" in result.stdout
+    # assert descriptions for minimal required options
+    assert '-d "Mod loader"' in result.stdout
+    assert '-d "CPU architecture"' in result.stdout
+    assert '-d "Provider name"' in result.stdout
+    assert '-d "Project ID"' in result.stdout
+    assert '-d "Base URL for hosted mods"' in result.stdout
+    assert '-d "Fail if variant already exists"' in result.stdout
 
 
 def test_direct_rejects_relative_url(tmp_path, runner):
