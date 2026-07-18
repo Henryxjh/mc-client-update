@@ -1,0 +1,28 @@
+# Supported loaders
+LOADER_FABRIC = "fabric"
+LOADER_NEOFORGE = "neoforge"
+LOADER_FORGE = "forge"
+SUPPORTED_LOADERS = {LOADER_FABRIC, LOADER_NEOFORGE, LOADER_FORGE}
+
+# Supported operating systems
+OS_ANDROID = "android"
+OS_WINDOWS = "windows"
+OS_LINUX = "linux"
+OS_MACOS = "macos"
+SUPPORTED_OS = {OS_ANDROID, OS_WINDOWS, OS_LINUX, OS_MACOS}
+
+# Supported CPU architectures
+ARCH_X86_64 = "x86_64"
+ARCH_X86_32 = "x86_32"
+ARCH_AARCH64 = "aarch64"
+ARCH_ARM32 = "arm32"
+ARCH_RISCV64 = "riscv64"
+ARCH_LOONGARCH64 = "loongarch64"
+SUPPORTED_ARCH = {
+    ARCH_X86_64,
+    ARCH_X86_32,
+    ARCH_AARCH64,
+    ARCH_ARM32,
+    ARCH_RISCV64,
+    ARCH_LOONGARCH64,
+}

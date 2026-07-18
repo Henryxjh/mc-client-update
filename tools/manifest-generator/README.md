@@ -1,6 +1,27 @@
 # Manifest 生成器规格
 
-> 当前状态：本目录是未来 Python 工具 `mcumanifest` 的项目根目录。目前只记录功能规格，不包含可执行代码。
+> 当前状态：本目录已经包含 Python 工具 `mcumanifest` 的初版实现和测试。
+
+## 当前实现
+
+初版已实现：
+
+- `pyproject.toml` 和 `mcumanifest` 命令行入口。
+- `manifest-workspace.json` 读写。
+- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`remove`、`list`、`set-license`、`build`、`validate`、`completion` 子命令。
+- selector 枚举：loader、OS、CPU 架构（含 `loongarch64`）。
+- 重复 modid + selector 的冲突处理：非交互失败，`--force` 覆盖，`--no-overwrite` 失败。
+- `sha256` / `sha512` 与 size 计算。
+- hosted/direct/manual 三种下载类型。
+- hosted license 策略检查，空 license 允许 hosted，常见开源协议允许 hosted，ARR/Custom/Unknown/未识别协议默认禁止，`allowRedistribution` 可覆盖。
+- `baseUrl`、`minimumLoaderVersions` 等 manifest 顶层字段透传。
+- fish completion 静态脚本输出。
+
+运行测试：
+
+```bash
+PYTHONPATH=tools/manifest-generator/src python -m pytest tools/manifest-generator/tests
+```
 
 ## 目标
 

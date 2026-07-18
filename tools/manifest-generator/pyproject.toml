@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcumanifest"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.scripts]
+mcumanifest = "mcumanifest.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest", "jsonschema"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

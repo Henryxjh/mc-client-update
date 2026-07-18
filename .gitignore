@@ -19,6 +19,11 @@ run/
 # Local test project and generated test artifacts
 test-mod/
 
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Logs and OS files
 *.log
 .DS_Store
