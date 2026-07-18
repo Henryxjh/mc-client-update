@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
 import java.util.Optional;
 
 /** Installs downloaded artifacts into the game directory. */
@@ -121,45 +122,36 @@ public final class ArtifactInstaller {
             }
         }
 
-        // Group tasks by target path (ADD / REPLACE only)
-        Map<Path, InstallTarget> targets = new LinkedHashMap<>();
+        // Build canonical tasks (ADD / REPLACE only)
+        Map<String, InstallTarget> canonicalMap = new LinkedHashMap<>();
 
         for (UpdateCandidate candidate : otherCandidates) {
             DownloadedArtifact downloaded = modIdToDownloaded.get(candidate.modId());
             if (downloaded == null) {
-                continue; // not downloaded
+                continue;
             }
-
-            Path targetPath;
-            if (candidate.reason() == UpdateCandidate.Reason.HASH_MISMATCH) {
-                targetPath = candidate.installed().get().file();
-            } else {
-                targetPath = gameDirectory.resolve("mods")
-                        .resolve(candidate.selectedVariant().artifact().fileName());
-            }
-
-            targets.computeIfAbsent(targetPath, tp -> {
-                InstallTarget target = new InstallTarget();
-                target.targetPath = tp;
-                target.downloaded = downloaded;
-                target.modIds = new ArrayList<>();
-                return target;
-            }).modIds.add(candidate.modId());
-
-            // Record hash mismatch or missing required flags
-            InstallTarget target = targets.get(targetPath);
-            if (target.artifact == null) {
-                target.artifact = candidate.selectedVariant().artifact();
-            }
+            Artifact art = candidate.selectedVariant().artifact();
+            String canonical = canonicalName(downloaded, art);
+            InstallTarget target = canonicalMap.computeIfAbsent(canonical, c -> {
+                InstallTarget t = new InstallTarget();
+                t.modIds = new ArrayList<>();
+                t.downloaded = downloaded;
+                t.artifact = art;
+                t.canonicalFileName = c;
+                t.targetPath = gameDirectory.resolve("mods").resolve(c);
+                return t;
+            });
+            target.modIds.add(candidate.modId());
             if (candidate.reason() == UpdateCandidate.Reason.HASH_MISMATCH) {
                 target.hasHashMismatch = true;
+                target.originalInstalledJar = candidate.installed().get().file();
             } else {
                 target.hasMissingRequired = true;
             }
         }
 
         // Convert to ordered list
-        List<InstallTarget> orderedTasks = new ArrayList<>(targets.values());
+        List<InstallTarget> orderedTasks = new ArrayList<>(canonicalMap.values());
 
         for (int idx = 0; idx < orderedTasks.size(); idx++) {
             InstallTarget task = orderedTasks.get(idx);
@@ -237,34 +229,122 @@ public final class ArtifactInstaller {
                 }
 
                 if (replace) {
-                    // Perform replace using JarTransaction.install
-                    JarTransaction.Result result;
-                    try {
-                        result = JarTransaction.install(task.targetPath, pendingFile, expectedHashes);
-                        pendingCreated = false; // taken over by transaction
-                    } catch (IOException e) {
-                        installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
-                                "Jar transaction failed");
-                        continue;
+                    boolean samePath = task.targetPath.equals(task.originalInstalledJar);
+                    if (samePath) {
+                        // Use JarTransaction when target is the current jar
+                        JarTransaction.Result result;
+                        try {
+                            result = JarTransaction.install(task.targetPath, pendingFile, expectedHashes);
+                            pendingCreated = false; // taken over by transaction
+                        } catch (IOException e) {
+                            installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
+                                    "Jar transaction failed");
+                            continue;
+                        }
+
+                        Path installedJar = result.installedJar();
+                        Path backupJar = result.backupJar();
+
+                        String installedRel = gameDirectory.relativize(installedJar).toString()
+                                .replace('\\', '/');
+                        String backupRel = gameDirectory.relativize(backupJar).toString()
+                                .replace('\\', '/');
+
+                        InstalledArtifact artifactRecord = new InstalledArtifact(
+                                List.copyOf(task.modIds),
+                                task.canonicalFileName,
+                                task.downloaded.version(),
+                                task.downloaded.sourceType(),
+                                "REPLACE",
+                                installedRel,
+                                Optional.of(backupRel));
+                        installedList.add(artifactRecord);
+                    } else {
+                        // Rename replacement: target path differs from current jar
+                        Path oldJar = task.originalInstalledJar;
+
+                        // conflict if target already exists (and it's not the old jar)
+                        if (Files.exists(task.targetPath)) {
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
+                                    "Target already exists");
+                            continue;
+                        }
+
+                        Path backupPath = oldJar.resolveSibling(
+                                "." + oldJar.getFileName().toString() + ".mc-client-update-old");
+                        if (Files.exists(backupPath)) {
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
+                                    "Backup file already exists");
+                            continue;
+                        }
+
+                        // backup old jar
+                        try {
+                            atomicMove(oldJar, backupPath);
+                        } catch (IOException e) {
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.IO_ERROR,
+                                    "Failed to backup old file");
+                            continue;
+                        }
+
+                        // install pending to target
+                        try {
+                            atomicMove(pendingFile, task.targetPath);
+                            pendingCreated = false; // pending moved away
+                        } catch (IOException e) {
+                            // rollback: restore old jar from backup
+                            boolean rollbackOk = rollbackDifferentTargetInstall(
+                                    task.targetPath, backupPath, oldJar);
+                            String msg = "Failed to install target; ";
+                            msg += rollbackOk ? "rolled back" : "rollback failed";
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.IO_ERROR,
+                                    msg);
+                            continue;
+                        }
+
+                        // verify final file
+                        try {
+                            Hashing.Hashes finalHashes = Hashing.hashes(task.targetPath);
+                            long finalSize = Files.size(task.targetPath);
+                            if (!verifyHashes(finalSize, finalHashes, expectedSize, expectedHashes)) {
+                                boolean rollbackOk = rollbackDifferentTargetInstall(
+                                        task.targetPath, backupPath, oldJar);
+                                String msg = "Installed file size or hash mismatch; ";
+                                msg += rollbackOk ? "rolled back" : "rollback failed";
+                                installFailure(failures, task,
+                                        InstallFailure.InstallFailureCategory.HASH_MISMATCH,
+                                        msg);
+                                continue;
+                            }
+                        } catch (IOException e) {
+                            boolean rollbackOk = rollbackDifferentTargetInstall(
+                                    task.targetPath, backupPath, oldJar);
+                            String msg = "Failed to verify installed file; ";
+                            msg += rollbackOk ? "rolled back" : "rollback failed";
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.IO_ERROR,
+                                    msg);
+                            continue;
+                        }
+
+                        String installedRel = gameDirectory.relativize(task.targetPath).toString()
+                                .replace('\\', '/');
+                        String backupRel = gameDirectory.relativize(backupPath).toString()
+                                .replace('\\', '/');
+                        InstalledArtifact artifactRecord = new InstalledArtifact(
+                                List.copyOf(task.modIds),
+                                task.canonicalFileName,
+                                task.downloaded.version(),
+                                task.downloaded.sourceType(),
+                                "REPLACE",
+                                installedRel,
+                                Optional.of(backupRel));
+                        installedList.add(artifactRecord);
                     }
-
-                    Path installedJar = result.installedJar(); // should match targetPath
-                    Path backupJar = result.backupJar();
-
-                    String installedRel = gameDirectory.relativize(installedJar).toString()
-                            .replace('\\', '/');
-                    String backupRel = gameDirectory.relativize(backupJar).toString()
-                            .replace('\\', '/');
-
-                    InstalledArtifact artifactRecord = new InstalledArtifact(
-                            List.copyOf(task.modIds),
-                            task.downloaded.fileName(),
-                            task.downloaded.version(),
-                            task.downloaded.sourceType(),
-                            "REPLACE",
-                            installedRel,
-                            Optional.of(backupRel));
-                    installedList.add(artifactRecord);
                 } else {
                     // ADD: move pending to final location
                     try {
@@ -296,7 +376,7 @@ public final class ArtifactInstaller {
                             .replace('\\', '/');
                     InstalledArtifact addRecord = new InstalledArtifact(
                             List.copyOf(task.modIds),
-                            task.downloaded.fileName(),
+                            task.canonicalFileName,
                             task.downloaded.version(),
                             task.downloaded.sourceType(),
                             "ADD",
@@ -341,6 +421,8 @@ public final class ArtifactInstaller {
         Artifact artifact;
         boolean hasHashMismatch;
         boolean hasMissingRequired;
+        Path originalInstalledJar;
+        String canonicalFileName;
     }
 
     private static void installFailure(
@@ -348,9 +430,15 @@ public final class ArtifactInstaller {
             InstallTarget target,
             InstallFailure.InstallFailureCategory category,
             String message) {
+        String fileName;
+        if (target.canonicalFileName != null) {
+            fileName = target.canonicalFileName;
+        } else {
+            fileName = target.downloaded.fileName();
+        }
         failures.add(new InstallFailure(
                 List.copyOf(target.modIds),
-                target.downloaded.fileName(),
+                fileName,
                 target.downloaded.version(),
                 target.downloaded.sourceType(),
                 category,
@@ -423,6 +511,52 @@ public final class ArtifactInstaller {
                 message));
     }
 
+    private static String canonicalName(DownloadedArtifact downloaded, Artifact artifact) {
+        List<String> modIds = downloaded.modIds();
+        List<String> sortedIds = new ArrayList<>(modIds);
+        Collections.sort(sortedIds);
+        String modid = sortedIds.isEmpty() ? "unknown" : sortedIds.get(0);
+        String version = safeVersion(artifact.version());
+        String hash = getInstallHash(artifact);
+        return modid + "-" + version + "-" + hash + ".jar";
+    }
+
+    private static String safeVersion(String version) {
+        if (version == null || version.isEmpty()) {
+            return "unknown";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < version.length(); i++) {
+            char c = version.charAt(i);
+            if (isSafeChar(c)) {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        String result = sb.toString();
+        if (result.isEmpty()) {
+            return "unknown";
+        }
+        return result;
+    }
+
+    private static boolean isSafeChar(char c) {
+        // keep ASCII letters, digits, '.', '_', '+', '-'
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9') ||
+               c == '.' || c == '_' || c == '+' || c == '-';
+    }
+
+    private static String getInstallHash(Artifact artifact) {
+        Optional<String> sha512 = artifact.hashes().sha512();
+        if (sha512.isPresent()) {
+            return sha512.get();
+        }
+        return artifact.hashes().sha256().orElseThrow(() ->
+                new IllegalArgumentException("artifact has no sha256 or sha512 hash"));
+    }
+
     private static void markRemainingDeletedInterrupted(
             List<InstallFailure> failures,
             List<UpdateCandidate> deleteCandidates,
@@ -431,6 +565,24 @@ public final class ArtifactInstaller {
             installDeleteFailure(failures, deleteCandidates.get(i),
                     InstallFailure.InstallFailureCategory.INTERRUPTED,
                     "Install interrupted");
+        }
+    }
+
+    private static void atomicMove(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(source, target);
+        }
+    }
+
+    private static boolean rollbackDifferentTargetInstall(Path targetPath, Path backupPath, Path oldJar) {
+        try {
+            Files.deleteIfExists(targetPath);
+            atomicMove(backupPath, oldJar);
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 

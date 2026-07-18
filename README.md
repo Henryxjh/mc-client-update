@@ -24,6 +24,7 @@ Minecraft 1.21.1 客户端 Mod 更新器，支持 Fabric 和 NeoForge，目标�
 - 稳定的下载目标标识，例如 `fabric-windows-x86_64` 和 `neoforge-android-aarch64`。
 - 从配置的 `manifestUrl` 拉取更新清单并执行完整的 schema 及语义验证（包括版本、时间戳、过期、必需字段、modid 格式、选择器枚举、下载类型等）。
 - **已实现** Mod 扫描及 variant 匹配，已下载到暂存区（`.mc-client-update/downloads/sha512-<HASH>/<fileName>` 或 `sha256-<HASH>/<fileName>`），并在下载完成后安装到 mods 目录。
+  安装时自动将文件重命名为规范文件名：`<modid>-<version>-<hash>.jar`，其中 `hash` 优先取 sha512 否则 sha256，版本字符串仅保留 ASCII 字母数字、点、下划线、加号、短横线。
 
 **已实现** 根据更新候选下载 artifact **并安装到游戏目录**：
   - 三种下载方式：`hosted`（相对 URL 可使用 `baseUrl` 或 manifest URI 解析）、`direct`（绝对直链）、`manual`（不自动下载，仅记录）。
