@@ -27,8 +27,10 @@ public record InstalledArtifact(
         if (modIds.isEmpty()) {
             throw new IllegalArgumentException("modIds must not be empty");
         }
-        if (!"ADD".equals(action) && !"REPLACE".equals(action)) {
-            throw new IllegalArgumentException("action must be ADD or REPLACE");
+        if (!"ADD".equals(action) && !"REPLACE".equals(action)
+                && !"DELETE".equals(action)) {
+            throw new IllegalArgumentException(
+                    "action must be ADD, REPLACE or DELETE");
         }
         if (fileName.isBlank()) {
             throw new IllegalArgumentException("fileName must not be blank");
@@ -36,17 +38,22 @@ public record InstalledArtifact(
         if (version.isBlank()) {
             throw new IllegalArgumentException("version must not be blank");
         }
-        if (!"hosted".equals(sourceType) && !"direct".equals(sourceType)) {
-            throw new IllegalArgumentException("sourceType must be hosted or direct");
+        if (!"hosted".equals(sourceType) && !"direct".equals(sourceType)
+                && !"delete".equals(sourceType)) {
+            throw new IllegalArgumentException(
+                    "sourceType must be hosted, direct or delete");
         }
         if (installedRelativePath.isBlank()) {
             throw new IllegalArgumentException("installedRelativePath must not be blank");
         }
-        if ("REPLACE".equals(action) && backupRelativePath.isEmpty()) {
-            throw new IllegalArgumentException("backupRelativePath required for REPLACE");
+        if (("REPLACE".equals(action) || "DELETE".equals(action))
+                && backupRelativePath.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "backupRelativePath required for REPLACE/DELETE");
         }
         if ("ADD".equals(action) && backupRelativePath.isPresent()) {
-            throw new IllegalArgumentException("backupRelativePath must not be present for ADD");
+            throw new IllegalArgumentException(
+                    "backupRelativePath must not be present for ADD");
         }
         List<String> sorted = new ArrayList<>(modIds);
         Collections.sort(sorted);

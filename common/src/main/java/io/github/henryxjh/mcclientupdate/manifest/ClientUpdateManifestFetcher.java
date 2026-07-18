@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 
 /**
  * Downloads and parses a client update manifest from a configured URL.
@@ -201,6 +202,20 @@ public final class ClientUpdateManifestFetcher {
             throw new ManifestFetchException("Mod entry '" + modJson.name + "' is missing required field 'required'");
         }
         boolean required = modJson.required;
+
+        // parse action
+        ModAction action = ModAction.INSTALL;
+        if (modJson.action != null && !modJson.action.isBlank()) {
+            String rawAct = modJson.action.strip().toLowerCase(Locale.ROOT);
+            if ("install".equals(rawAct)) {
+                action = ModAction.INSTALL;
+            } else if ("delete".equals(rawAct)) {
+                action = ModAction.DELETE;
+            } else {
+                throw new ManifestFetchException("Unknown action value: " + modJson.action);
+            }
+        }
+
         String homepageStr = null;
         if (modJson.homepage != null && !modJson.homepage.isBlank()) {
             String raw = modJson.homepage.strip();
@@ -223,25 +238,33 @@ public final class ClientUpdateManifestFetcher {
             }
         }
 
+        // Action-based variant handling.
         List<Variant> variants;
-        if (modJson.variants == null || modJson.variants.isEmpty()) {
-            throw new ManifestFetchException("Mod '" + modJson.name + "' must contain at least one variant");
-        }
-        for (VariantJson vj : modJson.variants) {
-            if (vj == null) {
-                throw new ManifestFetchException("Mod '" + modJson.name + "' contains a null variant entry");
+        if (action == ModAction.DELETE) {
+            // For DELETE action variants can be omitted or empty.
+            variants = List.of();
+        } else {
+            // INSTALL action must have valid and non-empty variants.
+            if (modJson.variants == null || modJson.variants.isEmpty()) {
+                throw new ManifestFetchException("Mod '" + modJson.name + "' must contain at least one variant");
             }
+            for (VariantJson vj : modJson.variants) {
+                if (vj == null) {
+                    throw new ManifestFetchException("Mod '" + modJson.name + "' contains a null variant entry");
+                }
+            }
+            variants = modJson.variants.stream()
+                    .map(ClientUpdateManifestFetcher::convertVariant)
+                    .collect(Collectors.toUnmodifiableList());
         }
-        variants = modJson.variants.stream()
-                .map(ClientUpdateManifestFetcher::convertVariant)
-                .collect(Collectors.toUnmodifiableList());
 
         return new Mod(
                 modJson.name.strip(),
                 required,
                 Optional.ofNullable(homepageStr),
                 Optional.ofNullable(modJson.license).map(String::strip).filter(s -> !s.isBlank()),
-                variants);
+                variants,
+                action);
     }
 
     private static Variant convertVariant(VariantJson variantJson) {
@@ -446,6 +469,7 @@ public final class ClientUpdateManifestFetcher {
         Boolean required;
         String homepage;
         String license;
+        String action; // install or delete (null/blank treated as INSTALL)
         List<VariantJson> variants;
     }
 

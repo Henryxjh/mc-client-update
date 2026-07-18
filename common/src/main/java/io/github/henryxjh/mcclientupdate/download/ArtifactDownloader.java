@@ -81,6 +81,9 @@ public final class ArtifactDownloader {
         LinkedHashMap<Artifact, List<String>> artifactToModIds = new LinkedHashMap<>();
 
         for (UpdateCandidate candidate : sortedCandidates) {
+            if (candidate.reason() == UpdateCandidate.Reason.DELETE) {
+                continue;
+            }
             String modId = candidate.modId();
             Variant variant = candidate.selectedVariant();
             Artifact artifact = variant.artifact();

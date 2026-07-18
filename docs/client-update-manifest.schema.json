@@ -53,7 +53,7 @@
     "mod": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "required", "variants"],
+      "required": ["name", "required"],
       "properties": {
         "name": {
           "type": "string",
@@ -69,9 +69,14 @@
         "license": {
           "type": "string"
         },
+        "action": {
+          "type": "string",
+          "enum": ["install", "delete"],
+          "default": "install"
+        },
         "variants": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "items": {
             "$ref": "#/$defs/variant"
           }

@@ -11,6 +11,7 @@ import io.github.henryxjh.mcclientupdate.manifest.Hashes;
 import io.github.henryxjh.mcclientupdate.manifest.HostedDownload;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.Mod;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 import io.github.henryxjh.mcclientupdate.manifest.Selector;
 import io.github.henryxjh.mcclientupdate.manifest.Variant;
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
@@ -256,5 +257,82 @@ class ArtifactInstallerTest {
         InstallFailure fail = res.failures().get(0);
         assertEquals(InstallFailure.InstallFailureCategory.TARGET_CONFLICT, fail.category());
         assertEquals("A.jar", fail.fileName());
+    }
+
+    @Test
+    void successfulDeleteMovesAndRecordsArtifact() throws IOException {
+        Path gameDir = gameDir();
+        Path modsDir = gameDir.resolve("mods");
+        Files.createDirectories(modsDir);
+        Path existing = modsDir.resolve("delme.jar");
+        String content = "to-be-removed";
+        Files.writeString(existing, content, UTF_8);
+
+        InstalledMod installed = new InstalledMod("delete-me", "1.2.3", existing);
+        Mod delMod = new Mod("delete-me", false, Optional.empty(),
+                Optional.empty(), List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("delete-me", delMod));
+        ScanResult scan = new ScanResult(
+                List.of(new UpdateCandidate(
+                        "delete-me", delMod, null,
+                        Optional.of(installed), UpdateCandidate.Reason.DELETE)),
+                1, 1);
+        DownloadBatchResult dl = new DownloadBatchResult(
+                manifest.manifestId(), 1L, List.of(), List.of(), List.of());
+
+        InstallBatchResult res = ArtifactInstaller.installBatch(
+                manifest, scan, dl, gameDir);
+        assertEquals(1, res.installed().size());
+        InstalledArtifact installedArt = res.installed().get(0);
+        assertEquals("DELETE", installedArt.action());
+        assertEquals("delete", installedArt.sourceType());
+        assertEquals("delme.jar", installedArt.fileName());
+        assertEquals("1.2.3", installedArt.version());
+        assertTrue(installedArt.backupRelativePath().isPresent());
+        String backupRel = installedArt.backupRelativePath().get();
+        Path backupPath = gameDir.resolve(backupRel);
+        assertEquals(
+                "." + existing.getFileName().toString()
+                + ".mc-client-update-deleted",
+                backupPath.getFileName().toString());
+        assertTrue(Files.isRegularFile(backupPath));
+        assertTrue(Files.notExists(existing));
+    }
+
+    @Test
+    void deleteBackupConflictRecordsFailure() throws IOException {
+        Path gameDir = gameDir();
+        Path modsDir = gameDir.resolve("mods");
+        Files.createDirectories(modsDir);
+        Path existing = modsDir.resolve("conflict.jar");
+        Files.writeString(existing, "stuff", UTF_8);
+        Path backup = existing.resolveSibling(
+                "." + existing.getFileName().toString()
+                + ".mc-client-update-deleted");
+        Files.writeString(backup, "occupied", UTF_8);
+
+        InstalledMod installed = new InstalledMod("conflict-mod", "0.1", existing);
+        Mod delMod = new Mod("conflict-mod", false, Optional.empty(),
+                Optional.empty(), List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("conflict-mod", delMod));
+        ScanResult scan = new ScanResult(
+                List.of(new UpdateCandidate(
+                        "conflict-mod", delMod, null,
+                        Optional.of(installed), UpdateCandidate.Reason.DELETE)),
+                1, 1);
+        DownloadBatchResult dl = new DownloadBatchResult(
+                manifest.manifestId(), 1L, List.of(), List.of(), List.of());
+
+        InstallBatchResult res = ArtifactInstaller.installBatch(
+                manifest, scan, dl, gameDir);
+        assertEquals(0, res.installed().size());
+        assertEquals(1, res.failures().size());
+        InstallFailure failure = res.failures().get(0);
+        assertEquals(InstallFailure.InstallFailureCategory.TARGET_CONFLICT, failure.category());
+        assertEquals("conflict.jar", failure.fileName());
+        assertEquals("0.1", failure.version());
+        assertEquals("delete", failure.sourceType());
+        assertTrue(Files.isRegularFile(existing));
+        assertTrue(Files.isRegularFile(backup));
     }
 }

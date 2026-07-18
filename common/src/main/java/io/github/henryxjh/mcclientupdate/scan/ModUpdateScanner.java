@@ -3,6 +3,7 @@ package io.github.henryxjh.mcclientupdate.scan;
 import io.github.henryxjh.mcclientupdate.manifest.Artifact;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.Mod;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 import io.github.henryxjh.mcclientupdate.manifest.Selector;
 import io.github.henryxjh.mcclientupdate.manifest.Variant;
 import io.github.henryxjh.mcclientupdate.platform.UpdateTarget;
@@ -64,6 +65,31 @@ public final class ModUpdateScanner {
 
         for (String modId : orderedModIds) {
             Mod mod = manifest.mods().get(modId);
+            if (mod.action() == ModAction.DELETE) {
+                InstalledMod installed = installedByModId.get(modId);
+                if (installed != null) {
+                    Path normFile = installed.file().toAbsolutePath().normalize();
+                    if (!Files.isRegularFile(normFile)) {
+                        throw new ModScanException(
+                                "Installed mod " + modId + " is not a regular file");
+                    }
+                    Path realFile;
+                    try {
+                        realFile = normFile.toRealPath();
+                    } catch (IOException e) {
+                        throw new ModScanException(
+                                "Cannot resolve real path for installed file of mod " + modId
+                                        + " (" + normFile.getFileName() + ")", e);
+                    }
+                    if (!realFile.startsWith(realModsDir)) {
+                        throw new ModScanException(
+                                "Installed mod " + modId + " is outside the mods directory");
+                    }
+                    candidates.add(new UpdateCandidate(modId, mod, null,
+                            Optional.of(installed), UpdateCandidate.Reason.DELETE));
+                }
+                continue;
+            }
             Variant selected = selectVariant(mod, target);
 
             // No matching variant

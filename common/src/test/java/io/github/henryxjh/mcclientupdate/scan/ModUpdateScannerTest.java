@@ -1,6 +1,7 @@
 package io.github.henryxjh.mcclientupdate.scan;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -9,6 +10,7 @@ import io.github.henryxjh.mcclientupdate.manifest.Artifact;
 import io.github.henryxjh.mcclientupdate.manifest.HostedDownload;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.Mod;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 import io.github.henryxjh.mcclientupdate.manifest.Selector;
 import io.github.henryxjh.mcclientupdate.manifest.Variant;
 import io.github.henryxjh.mcclientupdate.platform.CpuArchitecture;
@@ -432,5 +434,59 @@ class ModUpdateScannerTest {
         assertEquals(2, candidates.size());
         assertEquals("a", candidates.get(0).modId());
         assertEquals("z", candidates.get(1).modId());
+    }
+
+    @Test
+    void deleteInstalledGeneratesDeleteCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        byte[] data = {1, 2, 3};
+        Files.write(modJar, data);
+        Mod mod = new Mod("mymod", false, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        List<InstalledMod> installed = List.of(installed("mymod", "1.0", modJar));
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, installed);
+        assertEquals(1, result.candidates().size());
+        UpdateCandidate c = result.candidates().get(0);
+        assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
+        assertTrue(c.installed().isPresent());
+        assertNull(c.selectedVariant());
+    }
+
+    @Test
+    void deleteNotInstalledSkips() throws Exception {
+        Path modsDir = modsDir();
+        Mod mod = new Mod("mymod", false, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
+        assertTrue(result.candidates().isEmpty());
+    }
+
+    @Test
+    void deleteIgnoresVariantSelectorAndRequired() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mymod.jar");
+        Files.write(modJar, new byte[]{1});
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        List<InstalledMod> installed = List.of(installed("mymod", "any", modJar));
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, installed);
+        assertEquals(1, result.candidates().size());
+        UpdateCandidate c = result.candidates().get(0);
+        assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
+        assertNull(c.selectedVariant());
+    }
+
+    @Test
+    void deleteRequiredNotInstalledSkips() throws Exception {
+        Path modsDir = modsDir();
+        Mod mod = new Mod("mymod", true, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
+        assertTrue(result.candidates().isEmpty());
     }
 }

@@ -80,9 +80,15 @@ public final class ClientUpdateBootstrap {
                 + "; update candidates: " + scanResult.candidates().size());
 
         for (UpdateCandidate candidate : scanResult.candidates()) {
+            String version;
+            if (candidate.reason() == UpdateCandidate.Reason.DELETE) {
+                version = "<delete>";
+            } else {
+                version = candidate.selectedVariant().artifact().version();
+            }
             platform.log("  " + candidate.modId()
                     + " reason=" + candidate.reason()
-                    + " targetVersion=" + candidate.selectedVariant().artifact().version());
+                    + " targetVersion=" + version);
         }
 
         DownloadBatchResult batchResult;

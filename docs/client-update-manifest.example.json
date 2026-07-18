@@ -129,6 +129,12 @@
           }
         }
       ]
+    },
+    "obsolete_mod": {
+      "name": "Obsolete Mod",
+      "required": false,
+      "action": "delete",
+      "variants": []
     }
   }
 }

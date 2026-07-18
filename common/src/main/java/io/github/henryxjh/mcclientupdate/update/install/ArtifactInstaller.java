@@ -7,6 +7,7 @@ import io.github.henryxjh.mcclientupdate.manifest.Hashes;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
+import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.update.Hashing;
 import io.github.henryxjh.mcclientupdate.update.JarTransaction;
 
@@ -27,6 +28,7 @@ import java.util.Optional;
 public final class ArtifactInstaller {
 
     private static final String PENDING_SUFFIX = ".mc-client-update-pending";
+    private static final String DELETE_SUFFIX = ".mc-client-update-deleted";
 
     private ArtifactInstaller() {
     }
@@ -50,10 +52,79 @@ public final class ArtifactInstaller {
             }
         }
 
-        // Group tasks by target path
+        List<InstalledArtifact> installedList = new ArrayList<>();
+        List<InstallFailure> failures = new ArrayList<>();
+
+        // Separate DELETE candidates and process them first
+        List<UpdateCandidate> deleteCandidates = new ArrayList<>();
+        List<UpdateCandidate> otherCandidates = new ArrayList<>();
+        for (UpdateCandidate c : scanResult.candidates()) {
+            if (c.reason() == UpdateCandidate.Reason.DELETE) {
+                deleteCandidates.add(c);
+            } else {
+                otherCandidates.add(c);
+            }
+        }
+
+        for (int i = 0; i < deleteCandidates.size(); i++) {
+            UpdateCandidate del = deleteCandidates.get(i);
+            if (Thread.currentThread().isInterrupted()) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.INTERRUPTED, "Install interrupted");
+                markRemainingDeletedInterrupted(failures, deleteCandidates, i + 1);
+                break;
+            }
+            InstalledMod installedMod = del.installed().orElse(null);
+            if (installedMod == null) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.IO_ERROR, "No installed mod for DELETE");
+                continue;
+            }
+            Path originalJar = installedMod.file();
+            String fileName = originalJar.getFileName().toString();
+            String version = installedMod.version();
+
+            Path backupPath = originalJar.resolveSibling(
+                    "." + fileName + DELETE_SUFFIX);
+
+            if (Files.exists(backupPath)) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
+                        "Backup file already exists");
+                continue;
+            }
+
+            try {
+                try {
+                    Files.move(originalJar, backupPath,
+                            StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(originalJar, backupPath);
+                }
+                String installedRelPath = gameDirectory.relativize(originalJar)
+                        .toString().replace('\\', '/');
+                String backupRelPath = gameDirectory.relativize(backupPath)
+                        .toString().replace('\\', '/');
+                InstalledArtifact deleteRecord = new InstalledArtifact(
+                        List.of(del.modId()),
+                        fileName,
+                        version,
+                        "delete",
+                        "DELETE",
+                        installedRelPath,
+                        Optional.of(backupRelPath));
+                installedList.add(deleteRecord);
+            } catch (IOException e) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.IO_ERROR,
+                        "I/O error: " + e.toString());
+            }
+        }
+
+        // Group tasks by target path (ADD / REPLACE only)
         Map<Path, InstallTarget> targets = new LinkedHashMap<>();
 
-        for (UpdateCandidate candidate : scanResult.candidates()) {
+        for (UpdateCandidate candidate : otherCandidates) {
             DownloadedArtifact downloaded = modIdToDownloaded.get(candidate.modId());
             if (downloaded == null) {
                 continue; // not downloaded
@@ -89,9 +160,6 @@ public final class ArtifactInstaller {
 
         // Convert to ordered list
         List<InstallTarget> orderedTasks = new ArrayList<>(targets.values());
-
-        List<InstalledArtifact> installedList = new ArrayList<>();
-        List<InstallFailure> failures = new ArrayList<>();
 
         for (int idx = 0; idx < orderedTasks.size(); idx++) {
             InstallTarget task = orderedTasks.get(idx);
@@ -328,6 +396,42 @@ public final class ArtifactInstaller {
             return false;
         }
         return true;
+    }
+
+    private static void installDeleteFailure(
+            List<InstallFailure> failures,
+            UpdateCandidate candidate,
+            InstallFailure.InstallFailureCategory category,
+            String message) {
+        InstalledMod m = candidate.installed().orElse(null);
+        if (m == null) {
+            failures.add(new InstallFailure(
+                    List.of(candidate.modId()),
+                    "unknown",
+                    "unknown",
+                    "delete",
+                    category,
+                    message));
+            return;
+        }
+        failures.add(new InstallFailure(
+                List.of(candidate.modId()),
+                m.file().getFileName().toString(),
+                m.version(),
+                "delete",
+                category,
+                message));
+    }
+
+    private static void markRemainingDeletedInterrupted(
+            List<InstallFailure> failures,
+            List<UpdateCandidate> deleteCandidates,
+            int startIdx) {
+        for (int i = startIdx; i < deleteCandidates.size(); i++) {
+            installDeleteFailure(failures, deleteCandidates.get(i),
+                    InstallFailure.InstallFailureCategory.INTERRUPTED,
+                    "Install interrupted");
+        }
     }
 
 }

@@ -12,7 +12,8 @@ public record Mod(
         boolean required,
         Optional<String> homepage,
         Optional<String> license,
-        List<Variant> variants) {
+        List<Variant> variants,
+        ModAction action) {
 
     public Mod {
         if (name == null || name.isBlank()) {
@@ -20,9 +21,20 @@ public record Mod(
         }
         Objects.requireNonNull(homepage, "homepage");
         Objects.requireNonNull(license, "license");
-        if (variants == null || variants.isEmpty()) {
-            throw new IllegalArgumentException("mod variants must not be empty");
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(variants, "variants");
+        if (variants.isEmpty() && action == ModAction.INSTALL) {
+            throw new IllegalArgumentException("variants must not be empty for INSTALL");
         }
         variants = List.copyOf(variants);
+    }
+
+    /**
+     * Construct a Mod with default action {@link ModAction#INSTALL}.
+     */
+    public Mod(String name, boolean required,
+               Optional<String> homepage, Optional<String> license,
+               List<Variant> variants) {
+        this(name, required, homepage, license, variants, ModAction.INSTALL);
     }
 }

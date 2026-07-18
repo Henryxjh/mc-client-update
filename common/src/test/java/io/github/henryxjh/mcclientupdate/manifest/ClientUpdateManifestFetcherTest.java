@@ -23,6 +23,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 
 class ClientUpdateManifestFetcherTest {
 
@@ -689,5 +690,103 @@ class ClientUpdateManifestFetcherTest {
         assertTrue(dl instanceof DirectDownload);
         DirectDownload d = (DirectDownload) dl;
         assertEquals(Optional.of("99999999999999999999"), d.projectId());
+    }
+
+    @Test
+    void shouldUseDeleteAction() {
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "action-delete",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "to-del": {
+                      "name": "Delete Me",
+                      "required": false,
+                      "action": "delete"
+                    }
+                  }
+                }""".formatted(timestamp);
+        respond(HTTP_OK, json);
+        Manifest m = fetch();
+        Mod delMod = m.mods().get("to-del");
+        assertNotNull(delMod);
+        assertEquals(ModAction.DELETE, delMod.action());
+        assertTrue(delMod.variants().isEmpty());
+    }
+
+    @Test
+    void shouldRejectUnknownAction() {
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "action-unknown",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "bad": {
+                      "name": "Bad",
+                      "required": false,
+                      "action": "purge",
+                      "variants": [
+                        {
+                          "selector": {},
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "x.jar",
+                            "size": 10,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "x.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(timestamp);
+        respond(HTTP_OK, json);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("action"),
+                "should mention action for unknown action");
+    }
+
+    @Test
+    void shouldDefaultActionToInstall() {
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "action-default",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "has": {
+                      "name": "Has",
+                      "required": true,
+                      "variants": [
+                        {
+                          "selector": {},
+                          "artifact": {
+                            "version": "1.0",
+                            "fileName": "d.jar",
+                            "size": 1,
+                            "hashes": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+                            "download": { "type": "hosted", "url": "d.jar" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(timestamp);
+        respond(HTTP_OK, json);
+        Manifest m = fetch();
+        Mod mod = m.mods().get("has");
+        assertNotNull(mod);
+        assertEquals(ModAction.INSTALL, mod.action());
     }
 }

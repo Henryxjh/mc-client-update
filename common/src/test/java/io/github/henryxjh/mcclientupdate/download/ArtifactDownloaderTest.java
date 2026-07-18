@@ -10,9 +10,11 @@ import io.github.henryxjh.mcclientupdate.manifest.HostedDownload;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.ManualDownload;
 import io.github.henryxjh.mcclientupdate.manifest.Mod;
+import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 import io.github.henryxjh.mcclientupdate.manifest.Selector;
 import io.github.henryxjh.mcclientupdate.manifest.Variant;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
+import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -679,6 +681,34 @@ class ArtifactDownloaderTest {
     // -----------------------------------------------------------------
     // no .part leftovers after failure
     // -----------------------------------------------------------------
+
+    @Test
+    void deleteOnlyCandidatesYieldsNothing() throws Exception {
+        responseBody = new byte[100];
+        server.createContext("/mod.jar", exchange -> {
+            requestCount.incrementAndGet();
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
+        });
+        Mod delMod = new Mod("del-mod", false, Optional.empty(),
+                Optional.empty(), List.of(), ModAction.DELETE);
+        Manifest manifest = buildManifest(Optional.empty(),
+                Map.of("del-mod", delMod));
+        Path dummyJar = gameDir.resolve("mods").resolve("del-mod.jar");
+        Files.createDirectories(dummyJar.getParent());
+        Files.write(dummyJar, responseBody);
+        InstalledMod installed = new InstalledMod(
+                "del-mod", "0.9", dummyJar);
+        UpdateCandidate delCand = new UpdateCandidate(
+                "del-mod", delMod, null, Optional.of(installed),
+                UpdateCandidate.Reason.DELETE);
+        ScanResult scan = scanResultFor(List.of(delCand));
+        DownloadBatchResult result = ArtifactDownloader.downloadBatch(
+                manifest, manifestUri, scan, gameDir, timeout, timeout);
+        assertEquals(0, result.downloaded().size());
+        assertEquals(0, result.failed().size());
+        assertEquals(0, result.manualUpdates().size());
+    }
 
     @Test
     void noPartFilesRemainAfterFailure() throws Exception {

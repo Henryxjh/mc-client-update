@@ -66,9 +66,10 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 
 清单的 [JSON Schema](docs/client-update-manifest.schema.json) 和
 [完整示例](docs/client-update-manifest.example.json) 位于 `docs` 目录。每个 Mod 以
-主 `modid` 为键，并可配置多个平台变体。变体的 `selector` 未填写某个维度时表示
-该维度不受限制；匹配多个变体时选择 `priority` 最大的一个，最高优先级并列应视为
-无效清单，而不是依赖数组顺序猜测。
+主 `modid` 为键，并可配置多个平台变体。`action` 字段默认为 `"install"`，设为 `"delete"`
+时将在启动时移除已安装的 Mod（此时 `variants` 可以省略或为空数组）。变体的 `selector`
+未填写某个维度时表示该维度不受限制；匹配多个变体时选择 `priority` 最大的一个，最高
+优先级并列应视为无效清单，而不是依赖数组顺序猜测。
 
 三种下载方式为：
 

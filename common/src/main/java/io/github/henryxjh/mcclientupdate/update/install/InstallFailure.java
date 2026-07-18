@@ -39,8 +39,10 @@ public record InstallFailure(
         if (version.isBlank()) {
             throw new IllegalArgumentException("version must not be blank");
         }
-        if (!"hosted".equals(sourceType) && !"direct".equals(sourceType)) {
-            throw new IllegalArgumentException("sourceType must be hosted or direct");
+        if (!"hosted".equals(sourceType) && !"direct".equals(sourceType)
+                && !"delete".equals(sourceType)) {
+            throw new IllegalArgumentException(
+                    "sourceType must be hosted, direct or delete");
         }
         if (message.isBlank()) {
             throw new IllegalArgumentException("message must not be blank");
