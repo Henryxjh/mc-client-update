@@ -16,4 +16,6 @@ public interface PlatformContext {
     List<InstalledMod> installedMods();
 
     String loaderVersion();
+
+    String minecraftVersion();
 }

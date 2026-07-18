@@ -72,6 +72,16 @@ public final class NeoForgeClientUpdate {
                 }
                 return "0.0.0";
             }
+
+            @Override
+            public String minecraftVersion() {
+                for (IModInfo info : ModList.get().getMods()) {
+                    if ("minecraft".equals(info.getModId())) {
+                        return info.getVersion().toString();
+                    }
+                }
+                throw new ModScanException("Minecraft version not available: minecraft mod not found");
+            }
         });
     }
 }

@@ -19,6 +19,7 @@ import io.github.henryxjh.mcclientupdate.download.ManualUpdate;
 import io.github.henryxjh.mcclientupdate.manifest.ClientUpdateManifestFetcher;
 import io.github.henryxjh.mcclientupdate.manifest.Manifest;
 import io.github.henryxjh.mcclientupdate.manifest.ManifestFetchException;
+import io.github.henryxjh.mcclientupdate.manifest.MinecraftVersionValidator;
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 import io.github.henryxjh.mcclientupdate.platform.RuntimePlatform;
 import io.github.henryxjh.mcclientupdate.platform.UpdateTarget;
@@ -76,6 +77,21 @@ public final class ClientUpdateBootstrap {
         platform.log("Update manifest loaded: manifestId=" + manifest.manifestId()
                 + ", revision=" + manifest.revision()
                 + ", mods=" + manifest.modCount());
+
+        // Validate that the manifest Minecraft version matches the client's Minecraft version
+        String currentMcVersion = platform.minecraftVersion();
+        try {
+            MinecraftVersionValidator.validateMinecraftVersion(manifest.minecraftVersion(), currentMcVersion);
+        } catch (ManifestFetchException e) {
+            platform.log("Manifest Minecraft version mismatch: " + e.getMessage());
+            if ("ignore".equals(config.minecraftVersionMismatchAction())) {
+                platform.log("minecraftVersionMismatchAction=ignore; skipping update");
+                return;
+            }
+            throw e;
+        }
+        platform.log("Current Minecraft version: " + currentMcVersion
+                + ", manifest Minecraft version: " + manifest.minecraftVersion());
 
         Path modsDirectory = platform.gameDirectory().resolve("mods");
         List<InstalledMod> installedMods = platform.installedMods();

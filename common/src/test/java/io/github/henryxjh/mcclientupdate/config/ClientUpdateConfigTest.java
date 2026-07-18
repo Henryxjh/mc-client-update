@@ -23,6 +23,7 @@ class ClientUpdateConfigTest {
         assertTrue(Files.isRegularFile(gameDirectory.resolve("config").resolve(ClientUpdateConfig.FILE_NAME)));
         assertEquals(10, config.connectTimeout().toSeconds());
         assertEquals(30, config.readTimeout().toSeconds());
+        assertEquals("fail", config.minecraftVersionMismatchAction());
     }
 
     @Test
@@ -42,6 +43,7 @@ class ClientUpdateConfigTest {
         assertEquals("https://updates.example.com/client.json", config.redactedManifestEndpoint());
         assertEquals(5, config.connectTimeout().toSeconds());
         assertEquals(20, config.readTimeout().toSeconds());
+        assertEquals("fail", config.minecraftVersionMismatchAction());
     }
 
     @Test
@@ -70,6 +72,44 @@ class ClientUpdateConfigTest {
                 """);
 
         assertTrue(ClientUpdateConfig.load(gameDirectory).updatesEnabled());
+    }
+
+    @Test
+    void loadsIgnoreAction() throws IOException {
+        writeConfig("""
+                {
+                  "manifestUrl": "https://example.com/client.json",
+                  "minecraftVersionMismatchAction": "ignore"
+                }
+                """);
+        ClientUpdateConfig config = ClientUpdateConfig.load(gameDirectory);
+        assertEquals("ignore", config.minecraftVersionMismatchAction());
+    }
+
+    @Test
+    void rejectsInvalidMismatchAction() throws IOException {
+        writeConfig("""
+                {
+                  "manifestUrl": "https://example.com/client.json",
+                  "minecraftVersionMismatchAction": "warn"
+                }
+                """);
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> ClientUpdateConfig.load(gameDirectory));
+        assertTrue(ex.getMessage().contains("minecraftVersionMismatchAction"));
+    }
+
+    @Test
+    void rejectsNullMismatchAction() throws IOException {
+        writeConfig("""
+                {
+                  "manifestUrl": "https://example.com/client.json",
+                  "minecraftVersionMismatchAction": null
+                }
+                """);
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> ClientUpdateConfig.load(gameDirectory));
+        assertTrue(ex.getMessage().contains("minecraftVersionMismatchAction"));
     }
 
     private void writeConfig(String contents) throws IOException {

@@ -61,10 +61,12 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
   "readTimeoutSeconds": 30,
   "allowInsecureHttp": false,
   "cleanupBackupsAfterDays": 14,
-  "cleanupDownloadCacheAfterDays": 30
+  "cleanupDownloadCacheAfterDays": 30,
+  "minecraftVersionMismatchAction": "fail"
 }
 ```
 
+- `minecraftVersionMismatchAction`（默认 `"fail"`）：当清单中的 Minecraft 版本与当前客户端版本不匹配时的行为。可选值 `"fail"`（立即抛出致命错误，游戏无法启动）或 `"ignore"`（记录警告并跳过本次更新流程，继续启动）。
 - `cleanupBackupsAfterDays`（默认 14）：删除 `mods/` 目录中最后修改时间超过该天数的安全后缀文件，
   后缀包括 `.mc-client-update-old`、`.mc-client-update-deleted`、`.mc-client-update-rejected`、
   `.mc-client-update-pending`。设为 0 禁用该清理。
@@ -81,7 +83,8 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 ## 更新清单
 
 清单的 [JSON Schema](docs/client-update-manifest.schema.json) 和
-[完整示例](docs/client-update-manifest.example.json) 位于 `docs` 目录。每个 Mod 以
+[完整示例](docs/client-update-manifest.example.json) 位于 `docs` 目录。启动时会校验 `minecraftVersion` 字段与当前客户端 Minecraft 版本完全一致；
+不匹配时根据 `minecraftVersionMismatchAction` 处理：取值 `"fail"` 导致启动失败并显示错误信息，取值 `"ignore"` 则记录警告并跳过本次更新流程继续启动。每个 Mod 以
 主 `modid` 为键，并可配置多个平台变体。`action` 字段默认为 `"install"`，设为 `"delete"`
 时将在启动时移除已安装的 Mod（此时 `variants` 可以省略或为空数组）。变体的 `selector`
 未填写某个维度时表示该维度不受限制；匹配多个变体时选择 `priority` 最大的一个，最高

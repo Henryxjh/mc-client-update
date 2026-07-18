@@ -34,18 +34,22 @@ public final class ClientUpdateConfig {
     private final Duration readTimeout;
     private final int cleanupBackupsAfterDays;
     private final int cleanupDownloadCacheAfterDays;
+    private final String minecraftVersionMismatchAction;
 
     private ClientUpdateConfig(
             URI manifestUri,
             Duration connectTimeout,
             Duration readTimeout,
             int cleanupBackupsAfterDays,
-            int cleanupDownloadCacheAfterDays) {
+            int cleanupDownloadCacheAfterDays,
+            String minecraftVersionMismatchAction) {
         this.manifestUri = manifestUri;
         this.connectTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.readTimeout = Objects.requireNonNull(readTimeout, "readTimeout");
         this.cleanupBackupsAfterDays = cleanupBackupsAfterDays;
         this.cleanupDownloadCacheAfterDays = cleanupDownloadCacheAfterDays;
+        this.minecraftVersionMismatchAction = Objects.requireNonNull(
+                minecraftVersionMismatchAction, "minecraftVersionMismatchAction");
     }
 
     public static ClientUpdateConfig load(Path gameDirectory) {
@@ -74,12 +78,15 @@ public final class ClientUpdateConfig {
         int cleanupCache = validateDays(
                 "cleanupDownloadCacheAfterDays", json.cleanupDownloadCacheAfterDays, configPath);
 
+        String mismatchAction = validateMismatchAction(json.minecraftVersionMismatchAction, configPath);
+
         return new ClientUpdateConfig(
                 manifestUri,
                 Duration.ofSeconds(connectTimeoutSeconds),
                 Duration.ofSeconds(readTimeoutSeconds),
                 cleanupBackups,
-                cleanupCache);
+                cleanupCache,
+                mismatchAction);
     }
 
     public Optional<URI> manifestUri() {
@@ -106,6 +113,13 @@ public final class ClientUpdateConfig {
     /** Number of days after which download‑cache files are eligible for cleanup. */
     public int cleanupDownloadCacheAfterDays() {
         return cleanupDownloadCacheAfterDays;
+    }
+
+    /** Behavior when the manifest Minecraft version does not match the current client version:
+     *  "fail" (default) or "ignore".
+     */
+    public String minecraftVersionMismatchAction() {
+        return minecraftVersionMismatchAction;
     }
 
     /** Endpoint suitable for logs: user info, query parameters and fragments are removed. */
@@ -164,6 +178,19 @@ public final class ClientUpdateConfig {
         return days;
     }
 
+    private static String validateMismatchAction(String raw, Path configPath) {
+        if (raw == null) {
+            throw new IllegalStateException(
+                    "minecraftVersionMismatchAction must not be null in " + configPath);
+        }
+        String trimmed = raw.trim();
+        if ("fail".equals(trimmed) || "ignore".equals(trimmed)) {
+            return trimmed;
+        }
+        throw new IllegalStateException(
+                "minecraftVersionMismatchAction must be 'fail' or 'ignore' in " + configPath);
+    }
+
     private static URI parseManifestUri(String value, boolean allowInsecureHttp, Path configPath) {
         if (value == null || value.isBlank()) {
             return null;
@@ -201,5 +228,6 @@ public final class ClientUpdateConfig {
         private boolean allowInsecureHttp;
         private int cleanupBackupsAfterDays = DEFAULT_CLEANUP_BACKUPS_AFTER_DAYS;
         private int cleanupDownloadCacheAfterDays = DEFAULT_CLEANUP_DOWNLOAD_CACHE_AFTER_DAYS;
+        private String minecraftVersionMismatchAction = "fail";
     }
 }

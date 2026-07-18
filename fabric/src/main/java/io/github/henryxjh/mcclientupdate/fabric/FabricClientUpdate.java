@@ -77,6 +77,14 @@ public final class FabricClientUpdate implements ModInitializer {
                         .map(mc -> mc.getMetadata().getVersion().getFriendlyString())
                         .orElseThrow(() -> new ModScanException("Fabric Loader not found"));
             }
+
+            @Override
+            public String minecraftVersion() {
+                FabricLoader fabricLoader = FabricLoader.getInstance();
+                return fabricLoader.getModContainer("minecraft")
+                        .map(mc -> mc.getMetadata().getVersion().getFriendlyString())
+                        .orElseThrow(() -> new ModScanException("Minecraft version not available: minecraft mod not found"));
+            }
         });
     }
 }
