@@ -1,0 +1,59 @@
+# Maintainer: Henry <henry@localhost>
+
+pkgname=python-mcumanifest
+_name=mcumanifest
+_pkgbuild_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='MC Client Update manifest generator'
+arch=('any')
+url='https://example.invalid/mc-client-update'
+license=('custom')
+depends=('python')
+makedepends=(
+  'python-build'
+  'python-installer'
+  'python-setuptools'
+  'python-wheel'
+)
+checkdepends=(
+  'python-pytest'
+  'python-jsonschema'
+)
+optdepends=(
+  'python-jsonschema: full JSON Schema validation'
+)
+source=()
+sha256sums=()
+
+prepare() {
+  rm -rf "$startdir/.makepkg-src" "$startdir/.makepkg-dist"
+  mkdir -p "$startdir/.makepkg-src/$_name-$pkgver"
+
+  cp -a \
+    "$_pkgbuild_dir/pyproject.toml" \
+    "$_pkgbuild_dir/README.md" \
+    "$_pkgbuild_dir/src" \
+    "$_pkgbuild_dir/tests" \
+    "$startdir/.makepkg-src/$_name-$pkgver/"
+
+  find "$startdir/.makepkg-src/$_name-$pkgver" \
+    -type d \( -name '__pycache__' -o -name '.pytest_cache' \) \
+    -prune -exec rm -rf {} +
+}
+
+build() {
+  cd "$startdir/.makepkg-src/$_name-$pkgver"
+  python -m build --wheel --no-isolation --outdir "$startdir/.makepkg-dist"
+}
+
+check() {
+  cd "$startdir/.makepkg-src/$_name-$pkgver"
+  PYTHONPATH=src pytest tests
+}
+
+package() {
+  cd "$startdir/.makepkg-src/$_name-$pkgver"
+  python -m installer --destdir="$pkgdir" "$startdir"/.makepkg-dist/*.whl
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
