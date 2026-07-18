@@ -18,4 +18,8 @@ public interface PlatformContext {
     String loaderVersion();
 
     String minecraftVersion();
+
+    default String selfModId() {
+        return "mc_client_update";
+    }
 }

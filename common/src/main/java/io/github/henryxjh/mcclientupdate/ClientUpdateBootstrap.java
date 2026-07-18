@@ -33,6 +33,7 @@ import io.github.henryxjh.mcclientupdate.update.install.ArtifactInstaller;
 import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
 import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
 import io.github.henryxjh.mcclientupdate.update.install.InstalledArtifact;
+import java.util.Set;
 
 public final class ClientUpdateBootstrap {
 
@@ -95,7 +96,13 @@ public final class ClientUpdateBootstrap {
 
         Path modsDirectory = platform.gameDirectory().resolve("mods");
         List<InstalledMod> installedMods = platform.installedMods();
-        ScanResult scanResult = ModUpdateScanner.scan(manifest, target, modsDirectory, installedMods);
+        Set<String> protectedDeleteModIds = Set.of(platform.selfModId());
+        ScanResult scanResult = ModUpdateScanner.scan(
+                manifest,
+                target,
+                modsDirectory,
+                installedMods,
+                protectedDeleteModIds);
 
         platform.log("Installed managed mods: " + scanResult.installedManagedModCount()
                 + "; update candidates: " + scanResult.candidates().size());

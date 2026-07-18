@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Locale;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * Determines which manifest‑declared mods need to be downloaded/replaced.
@@ -43,6 +45,18 @@ public final class ModUpdateScanner {
                                   UpdateTarget target,
                                   Path modsDirectory,
                                   List<InstalledMod> installedMods) {
+        return scan(manifest, target, modsDirectory, installedMods, Collections.emptySet());
+    }
+
+    /**
+     * Overloaded scan that allows a set of protected mod ids which, when action is DELETE,
+     * will be silently skipped (no validation, no candidate).
+     */
+    public static ScanResult scan(Manifest manifest,
+                                  UpdateTarget target,
+                                  Path modsDirectory,
+                                  List<InstalledMod> installedMods,
+                                  Set<String> protectedDeleteModIds) {
         Map<String, InstalledMod> installedByModId = indexInstalled(installedMods);
 
         Path normalizedModsDir = modsDirectory.toAbsolutePath().normalize();
@@ -85,6 +99,10 @@ public final class ModUpdateScanner {
 
         for (String modId : orderedModIds) {
             Mod mod = manifest.mods().get(modId);
+            // protect self-updates from being deleted by the manifest
+            if (mod.action() == ModAction.DELETE && protectedDeleteModIds.contains(modId)) {
+                continue;
+            }
             if (mod.action() == ModAction.DELETE) {
                 InstalledMod installed = installedByModId.get(modId);
                 if (installed != null) {

@@ -26,6 +26,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collections;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -740,5 +742,72 @@ class ModUpdateScannerTest {
         InstalledMod installed = installed("mymod", "2.0", outside);
         assertThrows(ModScanException.class,
                 () -> ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed)));
+    }
+
+    @Test
+    void protectedDeleteSelfModSkippedWhenInstalled() throws Exception {
+        Path modsDir = modsDir();
+        Path selfJar = modsDir.resolve("mc-client-update.jar");
+        byte[] content = { 1, 2, 3 };
+        Files.write(selfJar, content);
+
+        Mod mod = new Mod("mc_client_update", false, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mc_client_update", mod));
+        List<InstalledMod> installed = List.of(installed("mc_client_update", "1.0.0", selfJar));
+
+        Set<String> protectedIds = Set.of("mc_client_update");
+        ScanResult result = ModUpdateScanner.scan(
+                manifest,
+                defaultTarget(),
+                modsDir,
+                installed,
+                protectedIds);
+        assertEquals(0, result.candidates().size());
+        assertEquals(1, result.manifestModCount());
+        assertEquals(1, result.installedManagedModCount());
+    }
+
+    @Test
+    void unprotectedDeleteStillEmitsCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("some-other-mod.jar");
+        byte[] content = { 5, 6, 7 };
+        Files.write(modJar, content);
+
+        Mod mod = new Mod("some-other-mod", false, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("some-other-mod", mod));
+        List<InstalledMod> installed = List.of(installed("some-other-mod", "1.0.0", modJar));
+
+        ScanResult result = ModUpdateScanner.scan(
+                manifest,
+                defaultTarget(),
+                modsDir,
+                installed,
+                Collections.emptySet());
+        assertEquals(1, result.candidates().size());
+        UpdateCandidate c = result.candidates().get(0);
+        assertEquals("some-other-mod", c.modId());
+        assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
+    }
+
+    @Test
+    void oldScanOverloadStillEmitsDeleteForSelfModId() throws Exception {
+        Path modsDir = modsDir();
+        Path selfJar = modsDir.resolve("mc-client-update.jar");
+        byte[] content = { 1, 2 };
+        Files.write(selfJar, content);
+
+        Mod mod = new Mod("mc_client_update", true, Optional.empty(), Optional.empty(),
+                List.of(), ModAction.DELETE);
+        Manifest manifest = makeManifest(Map.of("mc_client_update", mod));
+        List<InstalledMod> installed = List.of(installed("mc_client_update", "1.0.0", selfJar));
+
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, installed);
+        assertEquals(1, result.candidates().size());
+        UpdateCandidate c = result.candidates().get(0);
+        assertEquals("mc_client_update", c.modId());
+        assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
     }
 }
