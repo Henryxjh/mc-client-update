@@ -6,14 +6,25 @@ package io.github.henryxjh.mcclientupdate.manifest;
 public record Variant(
         Selector selector,
         int priority,
-        Artifact artifact) {
+        Artifact artifact,
+        ModAction action) {
+
+    public Variant(Selector selector, int priority, Artifact artifact) {
+        this(selector, priority, artifact, ModAction.INSTALL);
+    }
 
     public Variant {
         if (selector == null) {
             throw new IllegalArgumentException("selector must not be null");
         }
-        if (artifact == null) {
-            throw new IllegalArgumentException("artifact must not be null");
+        if (action == null) {
+            throw new IllegalArgumentException("action must not be null");
+        }
+        if (action == ModAction.INSTALL && artifact == null) {
+            throw new IllegalArgumentException("artifact must not be null for INSTALL action");
+        }
+        if (action == ModAction.DELETE && artifact != null) {
+            throw new IllegalArgumentException("artifact must be null for DELETE action");
         }
     }
 }

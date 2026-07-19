@@ -792,6 +792,65 @@ class ClientUpdateManifestFetcherTest {
     }
 
     @Test
+    void shouldUseDeleteActionForVariant() {
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "variant-action-delete",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "to-del": {
+                      "name": "Delete Variant",
+                      "required": false,
+                      "variants": [
+                        {
+                          "selector": { "loaders": ["fabric"] },
+                          "action": "delete"
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(timestamp);
+        respond(HTTP_OK, json);
+        Manifest m = fetch();
+        Variant v = m.mods().get("to-del").variants().get(0);
+        assertEquals(ModAction.DELETE, v.action());
+        assertTrue(v.artifact() == null);
+    }
+
+    @Test
+    void shouldRejectUnknownVariantAction() {
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "manifestId": "variant-action-unknown",
+                  "revision": 0,
+                  "generatedAt": "%s",
+                  "minecraftVersion": "1.21.1",
+                  "mods": {
+                    "bad": {
+                      "name": "Bad Variant",
+                      "required": false,
+                      "variants": [
+                        {
+                          "selector": {},
+                          "action": "purge"
+                        }
+                      ]
+                    }
+                  }
+                }""".formatted(timestamp);
+        respond(HTTP_OK, json);
+        ManifestFetchException ex = assertThrows(ManifestFetchException.class, this::fetch);
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("action"),
+                "should mention action for unknown variant action");
+    }
+
+    @Test
     void shouldAcceptMinimumLoaderVersions() {
         String time = DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3600));
         String body = """

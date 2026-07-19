@@ -102,7 +102,7 @@
     "variant": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["selector", "artifact"],
+      "required": ["selector"],
       "properties": {
         "selector": {
           "$ref": "#/$defs/selector"
@@ -113,6 +113,11 @@
         },
         "artifact": {
           "$ref": "#/$defs/artifact"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["install", "delete"],
+          "default": "install"
         }
       }
     },

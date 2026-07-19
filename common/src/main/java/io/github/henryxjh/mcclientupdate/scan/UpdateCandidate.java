@@ -45,15 +45,15 @@ public record UpdateCandidate(
                 }
                 break;
             case DELETE:
-                if (selectedVariant != null) {
+                if (selectedVariant != null && selectedVariant.action() != ModAction.DELETE) {
                     throw new ModScanException(
-                            "DELETE candidate must not have selectedVariant");
+                            "DELETE candidate with selectedVariant must have variant action DELETE");
                 }
                 if (installed.isEmpty()) {
                     throw new ModScanException("DELETE candidate must have an installed mod");
                 }
-                if (manifestMod.action() != ModAction.DELETE) {
-                    throw new ModScanException("DELETE candidate requires mod action DELETE");
+                if (selectedVariant == null && manifestMod.action() != ModAction.DELETE) {
+                    throw new ModScanException("DELETE candidate without variant requires mod action DELETE");
                 }
                 break;
             default:

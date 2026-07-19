@@ -810,4 +810,86 @@ class ModUpdateScannerTest {
         assertEquals("mc_client_update", c.modId());
         assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
     }
+
+    // ---- variant delete tests ----
+
+    @Test
+    void variantDeleteProducesDeleteCandidateWhenInstalled() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("my.jar");
+        byte[] content = { 9, 8, 7 };
+        Files.write(modJar, content);
+
+        Selector sel = new Selector(Optional.of(List.of("fabric")),
+                Optional.of(List.of("linux")),
+                Optional.of(List.of("x86_64")));
+        Variant deleteVariant = new Variant(sel, 0, null, ModAction.DELETE);
+        Mod mod = new Mod("modXd", false, Optional.empty(), Optional.empty(),
+                List.of(deleteVariant), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("modXd", mod));
+        InstalledMod installed = installed("modXd", "1.0", modJar);
+
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertEquals(1, result.candidates().size());
+        UpdateCandidate c = result.candidates().get(0);
+        assertEquals("modXd", c.modId());
+        assertEquals(UpdateCandidate.Reason.DELETE, c.reason());
+        assertTrue(c.selectedVariant() != null);
+        assertEquals(ModAction.DELETE, c.selectedVariant().action());
+        assertTrue(c.installed().isPresent());
+        assertEquals(modJar.toAbsolutePath().normalize(), c.installed().get().file());
+    }
+
+    @Test
+    void variantDeleteSkipWhenNotInstalled() throws Exception {
+        Path modsDir = modsDir();
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant deleteVariant = new Variant(sel, 0, null, ModAction.DELETE);
+        Mod mod = new Mod("modNotInstalled", true, Optional.empty(), Optional.empty(),
+                List.of(deleteVariant), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("modNotInstalled", mod));
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
+        assertTrue(result.candidates().isEmpty());
+    }
+
+    @Test
+    void variantDeleteProtectedModSkipped() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("protect.jar");
+        Files.write(modJar, new byte[]{1});
+
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant deleteVariant = new Variant(sel, 0, null, ModAction.DELETE);
+        Mod mod = new Mod("my_protected_mod", false, Optional.empty(), Optional.empty(),
+                List.of(deleteVariant), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("my_protected_mod", mod));
+        InstalledMod installed = installed("my_protected_mod", "1.0", modJar);
+        Set<String> protectedSet = Set.of("my_protected_mod");
+
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir,
+                List.of(installed), protectedSet);
+        assertTrue(result.candidates().isEmpty());
+    }
+
+    @Test
+    void variantInstallStillWorksWhenDeleteAlsoPresent() throws Exception {
+        Path modsDir = modsDir();
+        Path modJar = modsDir.resolve("mod.jar");
+        byte[] content = { 1, 2, 3, 4 };
+        Hashes h = writeAndHash(modJar, content);
+
+        Selector sel = new Selector(Optional.of(List.of("fabric")), Optional.empty(), Optional.empty());
+        Variant installVariant = new Variant(sel, 1,
+                artifact("1.0", content.length, Optional.of(h.sha256()), Optional.of(h.sha512())),
+                ModAction.INSTALL);
+        Selector selDel = new Selector(Optional.of(List.of("fabric")), Optional.of(List.of("linux")),
+                Optional.empty());
+        Variant deleteVariant = new Variant(selDel, 0, null, ModAction.DELETE);
+        Mod mod = new Mod("dual", true, Optional.empty(), Optional.empty(),
+                List.of(installVariant, deleteVariant), ModAction.INSTALL);
+        Manifest manifest = makeManifest(Map.of("dual", mod));
+        InstalledMod installed = installed("dual", "0.9", modJar);
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of(installed));
+        assertTrue(result.candidates().isEmpty());
+    }
 }

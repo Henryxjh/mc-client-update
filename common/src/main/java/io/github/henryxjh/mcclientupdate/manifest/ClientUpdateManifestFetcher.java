@@ -294,8 +294,33 @@ public final class ClientUpdateManifestFetcher {
                 validateSelectorList(sel.operatingSystems, "operatingSystems", ALLOWED_OS),
                 validateSelectorList(sel.architectures, "architectures", ALLOWED_ARCH));
 
-        Artifact artifact = convertArtifact(variantJson.artifact);
-        return new Variant(selector, variantJson.priority, artifact);
+        ModAction variantAction = ModAction.INSTALL;
+        if (variantJson.action != null && !variantJson.action.isBlank()) {
+            String rawAct = variantJson.action.strip().toLowerCase(Locale.ROOT);
+            if ("install".equals(rawAct)) {
+                variantAction = ModAction.INSTALL;
+            } else if ("delete".equals(rawAct)) {
+                variantAction = ModAction.DELETE;
+            } else {
+                throw new ManifestFetchException("Unknown variant action: " + variantJson.action);
+            }
+        }
+
+        Artifact artifact = null;
+        if (variantAction == ModAction.INSTALL) {
+            artifact = convertArtifact(variantJson.artifact);
+        } else {
+            // DELETE variant must not provide any artifact fields
+            if (variantJson.artifact != null) {
+                if (variantJson.artifact.version != null || variantJson.artifact.fileName != null
+                        || variantJson.artifact.size != null || variantJson.artifact.hashes != null
+                        || variantJson.artifact.download != null) {
+                    throw new ManifestFetchException("delete variant must not specify artifact fields");
+                }
+            }
+        }
+
+        return new Variant(selector, variantJson.priority, artifact, variantAction);
     }
 
     private static Optional<List<String>> validateSelectorList(List<String> raw, String fieldName, Set<String> allowed) {
@@ -523,6 +548,7 @@ public final class ClientUpdateManifestFetcher {
         SelectorJson selector;
         int priority;
         ArtifactJson artifact;
+        String action; // "install" / "delete", optional
     }
 
     private static final class SelectorJson {

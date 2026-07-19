@@ -521,3 +521,56 @@ def test_build_no_progress_for_delete(ws):
         assert events[0]["modid"] == "realmod"
         assert manifest["mods"]["deleteme"]["action"] == "delete"
     os.unlink(tf.name)
+
+
+# ---- Delete variant tests ----
+
+def test_build_delete_variant_outputs_action_and_no_artifact(ws):
+    ws["minecraftVersion"] = "1.21.1"
+    sel = {"loaders": ["fabric"]}
+    ws["mods"] = {
+        "todel": {
+            "name": "ToDelete",
+            "required": False,
+            "variants": [
+                {
+                    "selector": sel,
+                    "priority": 5,
+                    "action": "delete",
+                }
+            ],
+        }
+    }
+    manifest = build_manifest(ws)
+    mod = manifest["mods"]["todel"]
+    assert mod["name"] == "ToDelete"
+    assert mod["required"] is False
+    assert len(mod["variants"]) == 1
+    var = mod["variants"][0]
+    assert var["selector"] == sel
+    assert var["priority"] == 5
+    assert var["action"] == "delete"
+    assert "artifact" not in var
+
+
+def test_build_delete_variant_does_not_fire_progress(ws):
+    events = []
+    def progress(ev):
+        events.append(ev)
+    ws["minecraftVersion"] = "1.21.1"
+    ws["mods"] = {
+        "silent": {
+            "name": "SilentDelete",
+            "required": True,
+            "variants": [
+                {
+                    "selector": {},
+                    "priority": 0,
+                    "action": "delete",
+                }
+            ],
+        }
+    }
+    manifest = build_manifest(ws, progress_callback=progress)
+    assert len(events) == 0
+    assert manifest["mods"]["silent"]["variants"][0]["action"] == "delete"

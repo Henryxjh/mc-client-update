@@ -143,6 +143,39 @@ public final class ModUpdateScanner {
                 continue;
             }
 
+            // Variant action = DELETE
+            if (selected.action() == ModAction.DELETE) {
+                if (protectedDeleteModIds.contains(modId)) {
+                    // self‑update protection applies to variant‑level delete as well
+                    continue;
+                }
+                InstalledMod delInst = installedByModId.get(modId);
+                if (delInst == null) {
+                    // not installed – do NOT treat as missing required
+                    continue;
+                }
+                // Verify installed file safety (same checks as mod‑level DELETE)
+                Path normFileDel = delInst.file().toAbsolutePath().normalize();
+                if (!Files.isRegularFile(normFileDel)) {
+                    throw new ModScanException("Installed mod " + modId + " is not a regular file");
+                }
+                Path realFileDel;
+                try {
+                    realFileDel = normFileDel.toRealPath();
+                } catch (IOException e) {
+                    throw new ModScanException(
+                            "Cannot resolve real path for installed file of mod " + modId
+                                    + " (" + normFileDel.getFileName() + ")", e);
+                }
+                if (!realFileDel.startsWith(realModsDir)) {
+                    throw new ModScanException(
+                            "Installed mod " + modId + " is outside the mods directory");
+                }
+                candidates.add(new UpdateCandidate(modId, mod, selected,
+                        Optional.of(delInst), UpdateCandidate.Reason.DELETE));
+                continue;
+            }
+
             InstalledMod installed = installedByModId.get(modId);
 
             if (installed != null) {

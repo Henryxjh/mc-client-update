@@ -78,3 +78,22 @@ def test_variant_missing_selector_fails():
     del manifest["mods"]["moda"]["variants"][0]["selector"]
     with pytest.raises(ValueError, match="missing 'selector'"):
         validate_manifest(manifest)
+
+
+def test_delete_variant_without_artifact_passes():
+    manifest = make_valid_manifest()
+    manifest["mods"]["moda"]["variants"] = [
+        {
+            "selector": {"loaders": ["fabric"]},
+            "priority": 0,
+            "action": "delete",
+        }
+    ]
+    validate_manifest(manifest)
+
+
+def test_install_variant_without_artifact_fails():
+    manifest = make_valid_manifest()
+    del manifest["mods"]["moda"]["variants"][0]["artifact"]
+    with pytest.raises(ValueError, match="artifact"):
+        validate_manifest(manifest)

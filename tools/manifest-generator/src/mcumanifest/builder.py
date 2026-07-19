@@ -128,6 +128,19 @@ def build_manifest(
 
         built_variants = []
         for idx, var_data in enumerate(mod_data.get("variants", [])):
+            # ---------- variant action ----------
+            variant_action = var_data.get("action", "install")
+            if variant_action == "delete":
+                # Variant-level delete: no artifact, no download, no hash
+                variant_entry: Dict[str, Any] = {
+                    "selector": var_data.get("selector"),
+                    "priority": var_data.get("priority", 0),
+                    "action": "delete",
+                }
+                built_variants.append(variant_entry)
+                # Do NOT fire progress callback for delete variants
+                continue
+
             # ---------- download information ----------
             download_raw = var_data.get("download")
             if not download_raw:

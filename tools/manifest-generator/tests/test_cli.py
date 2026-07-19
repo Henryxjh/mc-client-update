@@ -384,3 +384,23 @@ def test_build_skip_delete_in_progress(tmp_path, runner):
     assert "deletemod" in manifest_data["mods"]
     assert manifest_data["mods"]["deletemod"]["action"] == "delete"
     assert manifest_data["mods"]["deletemod"]["variants"] == []
+
+
+def test_add_delete_variant_level_writes_workspace(tmp_path, runner):
+    import json
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    res = runner("--workspace", str(ws_file), "add-delete", "modv",
+                 "--loader", "fabric", "--os", "linux", "--arch", "x86_64")
+    assert res.returncode == 0
+    data = json.loads(ws_file.read_text())
+    assert "modv" in data["mods"]
+    mod = data["mods"]["modv"]
+    assert mod["required"] is False
+    assert len(mod["variants"]) == 1
+    var = mod["variants"][0]
+    assert var["selector"] == {"loaders": ["fabric"], "operatingSystems": ["linux"], "architectures": ["x86_64"]}
+    assert var["priority"] == 0
+    assert var["action"] == "delete"
+    assert "artifact" not in var

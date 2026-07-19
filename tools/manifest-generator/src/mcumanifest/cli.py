@@ -289,35 +289,131 @@ def cmd_set_version_policy(args):
 
 def cmd_add_delete(args):
     ws = workspace.load_workspace(args.workspace)
+    sel = None
+    has_selector = any(getattr(args, a, None) for a in ['loader', 'os', 'arch'])
+    if has_selector:
+        sel = workspace.selector_from_values(
+            loaders=[args.loader] if args.loader else None,
+            operating_systems=[args.os] if args.os else None,
+            architectures=[args.arch] if args.arch else None,
+        )
     mods = ws.setdefault("mods", {})
     existed = args.modid in mods
-    if existed:
-        if args.no_overwrite:
-            print("Error: mod already exists and --no-overwrite specified.", file=sys.stderr)
-            sys.exit(1)
-        if not args.force:
-            # non-interactive environment
-            if not sys.stdin.isatty():
-                print("Error: mod already exists and stdin is not a terminal.", file=sys.stderr)
+    # If there is already a mod‑level delete (action=delete, no variants) and we want a variant delete:
+    if has_selector and existed:
+        existing = mods[args.modid]
+        if existing.get("action") == "delete" and not existing.get("variants"):
+            if args.no_overwrite:
+                print("Error: a mod‑level delete already exists and --no-overwrite was given.", file=sys.stderr)
                 sys.exit(1)
-            old = mods[args.modid]
-            print(f"Modid: {args.modid}")
-            print(f"Old entry: name={old.get('name')}, required={old.get('required')}, "
-                  f"variants count={len(old.get('variants', []))}")
-            print("New entry: action=delete, variants=[]")
-            ans = input("Overwrite? [y/N] ").strip().lower()
-            if ans != "y":
-                print("Aborted.", file=sys.stderr)
+            if not args.force:
+                if not sys.stdin.isatty():
+                    print("Error: a mod‑level delete already exists and stdin is not a terminal.", file=sys.stderr)
+                    sys.exit(1)
+                print(f"Modid: {args.modid}")
+                print("Current entry: mod‑level delete (action=delete, no variants)")
+                print("New entry: variant‑level delete with selector")
+                ans = input("Overwrite? [y/N] ").strip().lower()
+                if ans != "y":
+                    print("Aborted.", file=sys.stderr)
+                    sys.exit(1)
+                args.force = True   # allow conversion below
+            if args.force:
+                # Remove mod‑level delete entry so we can add a variant delete
+                del mods[args.modid]
+                existed = False
+    if has_selector and not existed:
+        mods[args.modid] = {
+            "name": args.modid,
+            "required": False,
+            "variants": [],
+        }
+        existed = True
+    if not has_selector:
+        # Mod‑level delete
+        if existed:
+            if args.no_overwrite:
+                print("Error: mod already exists and --no-overwrite specified.", file=sys.stderr)
                 sys.exit(1)
-    # place delete entry
-    ws["mods"][args.modid] = {
-        "name": args.modid,
-        "required": False,
-        "action": "delete",
-        "variants": [],
-    }
-    workspace.save_workspace(ws, args.workspace)
-    print(f"Delete action for '{args.modid}' stored.")
+            if not args.force:
+                # non-interactive environment
+                if not sys.stdin.isatty():
+                    print("Error: mod already exists and stdin is not a terminal.", file=sys.stderr)
+                    sys.exit(1)
+                old = mods[args.modid]
+                print(f"Modid: {args.modid}")
+                print(f"Old entry: name={old.get('name')}, required={old.get('required')}, "
+                      f"variants count={len(old.get('variants', []))}")
+                print("New entry: action=delete, variants=[]")
+                ans = input("Overwrite? [y/N] ").strip().lower()
+                if ans != "y":
+                    print("Aborted.", file=sys.stderr)
+                    sys.exit(1)
+        ws["mods"][args.modid] = {
+            "name": args.modid,
+            "required": False,
+            "action": "delete",
+            "variants": [],
+        }
+        workspace.save_workspace(ws, args.workspace)
+        print(f"Mod‑level delete action for '{args.modid}' stored.")
+    else:
+        # Variant‑level delete
+        variant = {
+            "selector": sel,
+            "priority": 0,
+            "action": "delete",
+        }
+        ret = builder.add_or_update_variant(
+            ws,
+            args.modid,
+            sel,
+            variant,
+            force=args.force,
+            no_overwrite=args.no_overwrite,
+        )
+        if ret == "conflict":
+            if args.force:
+                pass
+            elif args.no_overwrite:
+                print(
+                    "Error: duplicate variant and --no-overwrite specified.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                if not sys.stdin.isatty():
+                    print(
+                        "Error: duplicate variant and stdin is not a terminal.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                # show old info
+                mod_entry = ws["mods"][args.modid]
+                idx = next(
+                    i
+                    for i, v in enumerate(mod_entry["variants"])
+                    if workspace.selector_equal(v.get("selector", {}), sel)
+                )
+                old = mod_entry["variants"][idx]
+                print(f"Modid: {args.modid}")
+                print(f"Selector: {sel}")
+                print(
+                    f"Old variant: version={old.get('version')}, "
+                    f"fileName={old.get('fileName')}, "
+                    f"download type={old.get('download', {}).get('type')}"
+                )
+                print(
+                    f"New variant: action=delete, selector={sel}"
+                )
+                ans = input("Overwrite? [y/N] ").strip().lower()
+                if ans != "y":
+                    print("Aborted.", file=sys.stderr)
+                    sys.exit(1)
+                # force overwrite after confirmation
+                builder.add_or_update_variant(ws, args.modid, sel, variant, force=True)
+        workspace.save_workspace(ws, args.workspace)
+        print(f"Variant‑level delete for '{args.modid}' stored.")
 
 
 def cmd_build(args):
@@ -403,6 +499,9 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l version-i
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l page-url -r -d "Page URL for manual download"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l message -r -d "Extra message for manual update"
 # add-delete
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l loader -r -a "fabric neoforge forge" -d "Mod loader (for variant delete)"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l os -r -a "android windows linux macos" -d "Operating system (for variant delete)"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l arch -r -a "x86_64 x86_32 aarch64 arm32 riscv64 loongarch64" -d "CPU architecture (for variant delete)"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l force -d "Force overwrite existing mod entry"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l no-overwrite -d "Fail if mod already exists"
 # remove
@@ -516,6 +615,9 @@ def main():
 
     p_delete = sub.add_parser("add-delete", help="Add a delete action for a mod")
     p_delete.add_argument("modid", help="Mod identifier")
+    p_delete.add_argument("--loader", choices=sorted(constants.SUPPORTED_LOADERS), help="Mod loader (optional; enables variant-level delete)")
+    p_delete.add_argument("--os", dest="os", choices=sorted(constants.SUPPORTED_OS), help="Operating system (optional)")
+    p_delete.add_argument("--arch", dest="arch", choices=sorted(constants.SUPPORTED_ARCH), help="CPU architecture (optional)")
     p_delete.add_argument("--force", action="store_true", help="Force overwrite existing mod entry")
     p_delete.add_argument("--no-overwrite", action="store_true", help="Fail if mod already exists")
 
