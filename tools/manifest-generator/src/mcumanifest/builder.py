@@ -95,6 +95,14 @@ def build_manifest(
 
     mods_src = workspace.get("mods", {})
     for modid, mod_data in mods_src.items():
+        if mod_data.get("action") == "delete":
+            manifest["mods"][modid] = {
+                "name": mod_data.get("name", modid),
+                "required": mod_data.get("required", False),
+                "action": "delete",
+                "variants": [],
+            }
+            continue
         mod_entry: Dict[str, Any] = {
             "name": mod_data.get("name", modid),
             "required": mod_data.get("required", False),

@@ -301,3 +301,86 @@ def test_build_no_progress(tmp_path, runner):
     assert "Schema validation passed" not in stdout
     assert "Manifest written" in stdout
     assert out_manifest.is_file()
+
+
+def test_add_delete_writes_workspace(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    res = runner("--workspace", str(ws_file), "add-delete", "mymod")
+    assert res.returncode == 0
+    data = json.loads(ws_file.read_text())
+    assert "mymod" in data["mods"]
+    mod = data["mods"]["mymod"]
+    assert mod["name"] == "mymod"
+    assert mod["required"] is False
+    assert mod["action"] == "delete"
+    assert mod["variants"] == []
+
+
+def test_add_delete_existing_fails_without_force(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    runner("--workspace", str(ws_file), "add-delete", "mymod")
+    res = runner("--workspace", str(ws_file), "add-delete", "mymod")
+    assert res.returncode != 0
+    assert "already exists" in res.stderr.lower() or "aborted" in res.stderr.lower()
+
+
+def test_add_delete_existing_with_force(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    runner("--workspace", str(ws_file), "add-delete", "mymod")
+    res = runner("--workspace", str(ws_file), "add-delete", "--force", "mymod")
+    assert res.returncode == 0
+    data = json.loads(ws_file.read_text())
+    assert data["mods"]["mymod"]["action"] == "delete"
+
+
+def test_add_delete_no_overwrite_on_existing(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    runner("--workspace", str(ws_file), "add-delete", "mymod")
+    res = runner("--workspace", str(ws_file), "add-delete", "--no-overwrite", "mymod")
+    assert res.returncode != 0
+    assert "no-overwrite" in res.stderr.lower() or "error" in res.stderr.lower()
+
+
+def test_build_skip_delete_in_progress(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    jar_file = tmp_path / "mod.jar"
+    with zipfile.ZipFile(jar_file, "w") as zf:
+        zf.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n")
+        zf.writestr("Dummy.class", b'\x00')
+
+    schema_file = tmp_path / "schema.json"
+    schema_data = {"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": True}
+    schema_file.write_text(json.dumps(schema_data))
+
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    # add a hosted variant so that there is at least one normal artifact
+    runner("--workspace", str(ws_file), "add-hosted", "hostedmod",
+           "--file", str(jar_file), "--url", "mods/hostedmod.jar",
+           "--version", "1.0", "--loader", "fabric")
+    # add a delete action
+    runner("--workspace", str(ws_file), "add-delete", "deletemod")
+
+    out_manifest = tmp_path / "manifest.json"
+    result = runner("--workspace", str(ws_file), "build",
+                    "--base-url", "https://example.com/",
+                    "--output", str(out_manifest),
+                    "--schema", str(schema_file))
+    assert result.returncode == 0
+    stdout = result.stdout
+    # Progress output should list the hosted artifact, but NOT the delete mod
+    assert "OK artifact: modid=hostedmod" in stdout
+    assert "deletemod" not in stdout
+
+    manifest_data = json.loads(out_manifest.read_text())
+    assert "deletemod" in manifest_data["mods"]
+    assert manifest_data["mods"]["deletemod"]["action"] == "delete"
+    assert manifest_data["mods"]["deletemod"]["variants"] == []

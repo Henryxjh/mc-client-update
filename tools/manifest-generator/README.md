@@ -162,6 +162,7 @@ mcumanifest scan --input installed-mods.json
 mcumanifest add-hosted create --file mods/create.jar --url mods/create.jar --loader neoforge
 mcumanifest add-direct sodium --file mods/sodium.jar --url https://cdn.example.com/sodium.jar --loader fabric
 mcumanifest add-manual restricted_mod --file mods/restricted.jar --page-url https://author.example/download
+mcumanifest add-delete some_mod
 mcumanifest remove create --loader neoforge --os linux --arch x86_64
 mcumanifest list
 mcumanifest set-license create MIT --allow-redistribution
@@ -181,6 +182,7 @@ mcumanifest completion fish
 - `add-hosted`：添加托管在自有 HTTP/HTTPS 服务上的文件。
 - `add-direct`：添加绝对直链下载文件。`--file` 可选；若省略 `--file`，在 `build` 阶段会从 `--url` 临时下载文件以计算 `size`、`sha256`、`sha512`；`fileName` 将由 URL 路径的 basename 自动推断，若无 basename 则使用 `<modid>.jar`。
 - `add-manual`：添加手动更新项，不生成自动下载 URL。
+- `add-delete`：添加全 mod 级删除操作（action=delete），不生成任何下载，不支持 selector。
 - `remove`：删除指定 modid，或删除指定 selector 对应的 variant。
 - `list`：以表格展示当前 workspace。
 - `set-license`：修改 license 和 `allowRedistribution`。

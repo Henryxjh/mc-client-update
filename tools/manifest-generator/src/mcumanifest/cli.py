@@ -287,6 +287,39 @@ def cmd_set_version_policy(args):
     workspace.save_workspace(ws, args.workspace)
 
 
+def cmd_add_delete(args):
+    ws = workspace.load_workspace(args.workspace)
+    mods = ws.setdefault("mods", {})
+    existed = args.modid in mods
+    if existed:
+        if args.no_overwrite:
+            print("Error: mod already exists and --no-overwrite specified.", file=sys.stderr)
+            sys.exit(1)
+        if not args.force:
+            # non-interactive environment
+            if not sys.stdin.isatty():
+                print("Error: mod already exists and stdin is not a terminal.", file=sys.stderr)
+                sys.exit(1)
+            old = mods[args.modid]
+            print(f"Modid: {args.modid}")
+            print(f"Old entry: name={old.get('name')}, required={old.get('required')}, "
+                  f"variants count={len(old.get('variants', []))}")
+            print("New entry: action=delete, variants=[]")
+            ans = input("Overwrite? [y/N] ").strip().lower()
+            if ans != "y":
+                print("Aborted.", file=sys.stderr)
+                sys.exit(1)
+    # place delete entry
+    ws["mods"][args.modid] = {
+        "name": args.modid,
+        "required": False,
+        "action": "delete",
+        "variants": [],
+    }
+    workspace.save_workspace(ws, args.workspace)
+    print(f"Delete action for '{args.modid}' stored.")
+
+
 def cmd_build(args):
     ws = workspace.load_workspace(args.workspace)
     if args.base_url:
@@ -339,6 +372,7 @@ complete -c mcumanifest -n "__fish_use_subcommand" -a scan -d "Import installed-
 complete -c mcumanifest -n "__fish_use_subcommand" -a add-hosted -d "Add a hosted (self-served) download"
 complete -c mcumanifest -n "__fish_use_subcommand" -a add-direct -d "Add a direct-download artifact"
 complete -c mcumanifest -n "__fish_use_subcommand" -a add-manual -d "Add a manual update reference"
+complete -c mcumanifest -n "__fish_use_subcommand" -a add-delete -d "Add a mod-level delete action"
 complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
 complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
@@ -368,6 +402,9 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l project-i
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -l version-id -r -d "Version ID on provider"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l page-url -r -d "Page URL for manual download"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -l message -r -d "Extra message for manual update"
+# add-delete
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l force -d "Force overwrite existing mod entry"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -l no-overwrite -d "Fail if mod already exists"
 # remove
 complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l loader -r -a "fabric neoforge forge" -d "Mod loader"
 complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -l os -r -a "android windows linux macos" -d "Operating system"
@@ -477,6 +514,11 @@ def main():
     p_manual.add_argument("--message", help="Extra message for the user")
     _add_variant_selectors(p_manual)
 
+    p_delete = sub.add_parser("add-delete", help="Add a delete action for a mod")
+    p_delete.add_argument("modid", help="Mod identifier")
+    p_delete.add_argument("--force", action="store_true", help="Force overwrite existing mod entry")
+    p_delete.add_argument("--no-overwrite", action="store_true", help="Fail if mod already exists")
+
     # remove
     p_remove = sub.add_parser("remove", help="Remove a mod or variant")
     p_remove.add_argument("modid", help="Mod identifier")
@@ -536,6 +578,7 @@ def main():
         "add-hosted": cmd_add_hosted,
         "add-direct": cmd_add_direct,
         "add-manual": cmd_add_manual,
+        "add-delete": cmd_add_delete,
         "remove": cmd_remove,
         "list": cmd_list,
         "set-license": cmd_set_license,

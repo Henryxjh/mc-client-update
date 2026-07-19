@@ -463,3 +463,61 @@ def test_direct_with_missing_local_file_raises(ws):
     }
     with pytest.raises(ValueError, match="Missing local file for mod 'missingdirect'"):
         build_manifest(ws)
+
+
+def test_build_delete_action(ws):
+    ws["mods"] = {
+        "todelete": {
+            "name": "DelMod",
+            "required": False,
+            "action": "delete",
+            "variants": [],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+    manifest = build_manifest(ws)
+    mod = manifest["mods"]["todelete"]
+    assert mod["name"] == "DelMod"
+    assert mod["required"] is False
+    assert mod["action"] == "delete"
+    assert mod["variants"] == []
+
+
+def test_build_no_progress_for_delete(ws):
+    events = []
+    def progress(ev):
+        events.append(ev)
+    import os, tempfile
+    with tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf:
+        tf.write(b"abc")
+        tf.flush()
+        ws["mods"] = {
+            "deleteme": {
+                "name": "del",
+                "required": False,
+                "action": "delete",
+                "variants": [],
+            },
+            "realmod": {
+                "name": "real",
+                "required": True,
+                "license": "mit",
+                "variants": [
+                    {
+                        "selector": {},
+                        "priority": 0,
+                        "version": "1.0",
+                        "fileName": "real.jar",
+                        "localFile": tf.name,
+                        "download": {"type": "hosted", "url": "https://example.com/real.jar"},
+                    }
+                ],
+            },
+        }
+        ws["minecraftVersion"] = "1.21.1"
+        manifest = build_manifest(ws, progress_callback=progress)
+        # delete mod should NOT invoke progress callback
+        assert len(events) == 1
+        assert events[0]["modid"] == "realmod"
+        assert manifest["mods"]["deleteme"]["action"] == "delete"
+    os.unlink(tf.name)
