@@ -185,7 +185,7 @@ mcumanifest completion fish
 - `list`：以表格展示当前 workspace。
 - `set-license`：修改 license 和 `allowRedistribution`。
 - `set-version-policy`：设置或清除 `skipIfInstalledVersionGreaterThan` 字段，用于控制当已安装版本大于指定值时跳过更新。
-- `build`：计算 hash/size，生成最终 manifest，并执行校验。
+- `build`：计算 hash/size，生成最终 manifest，并执行校验。默认输出每个 artifact 的处理进度；可用 `--no-progress` 关闭。
 - `validate`：只校验现有 manifest 或 workspace。
 - `completion`：输出 shell 自动补全脚本，至少支持 bash、zsh、fish。
 

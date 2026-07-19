@@ -291,9 +291,30 @@ def cmd_build(args):
     ws = workspace.load_workspace(args.workspace)
     if args.base_url:
         ws["baseUrl"] = args.base_url
-    manifest = builder.build_manifest(ws, allow_redistribution=False)
+
+    # --- progress callback ---
+    def _on_artifact(event: dict) -> None:
+        print(
+            f"  OK artifact: modid={event['modid']} variantIndex={event['variantIndex']} "
+            f"fileName={event['fileName']} version={event['version']} "
+            f"downloadType={event['downloadType']} size={event['size']} source={event['source']}"
+        )
+
+    if args.no_progress:
+        progress_callback = None
+    else:
+        progress_callback = _on_artifact
+        print("Building manifest...")
+
+    manifest = builder.build_manifest(
+        ws, allow_redistribution=False, progress_callback=progress_callback,
+    )
     schema_path = args.schema or validator._SCHEMA_PATH
+    if not args.no_progress:
+        print("Validating schema...")
     validator.validate_manifest(manifest, schema_path)
+    if not args.no_progress:
+        print("Schema validation passed.")
     out = args.output or "client-update-manifest.json"
     tmp = out + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
@@ -363,6 +384,7 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l c
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l output -r -d "Output path"
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l schema -r -F -d "Path to JSON Schema file"
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l base-url -r -d "Override base URL in manifest"
+complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l no-progress -d "Suppress detailed progress output"
 complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l manifest -r -F -d "Path to manifest JSON for validation"
 complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l schema -r -F -d "Path to JSON Schema file"
 """
@@ -491,6 +513,7 @@ def main():
     p_build.add_argument("--output", default="client-update-manifest.json", help="Output path")
     p_build.add_argument("--schema", help="Path to JSON Schema file")
     p_build.add_argument("--base-url", help="Override base URL in manifest")
+    p_build.add_argument("--no-progress", action="store_true", default=False, help="Suppress detailed progress output")
 
     # validate
     p_validate = sub.add_parser("validate", help="Validate an existing manifest")

@@ -1,4 +1,5 @@
 import json
+import zipfile
 import os
 import subprocess
 import sys
@@ -220,3 +221,83 @@ def test_add_direct_infers_file_name_when_url_has_no_basename(tmp_path, runner):
     # fallback: <modid>.jar
     assert var["fileName"] == "noext.jar"
     assert var["download"]["url"] == "https://cdn.example.com/"
+
+
+def test_build_progress_output(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    jar_file = tmp_path / "testmod.jar"
+    with zipfile.ZipFile(jar_file, "w") as zf:
+        zf.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n")
+        zf.writestr("Dummy.class", b'\x00')
+
+    schema_file = tmp_path / "schema.json"
+    schema_data = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "additionalProperties": True
+    }
+    schema_file.write_text(json.dumps(schema_data))
+
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    res = runner("--workspace", str(ws_file), "add-hosted", "testmod",
+                 "--file", str(jar_file), "--url", "mods/testmod.jar",
+                 "--version", "1.0.0", "--loader", "fabric")
+    assert res.returncode == 0
+
+    out_manifest = tmp_path / "manifest.json"
+    result = runner("--workspace", str(ws_file), "build",
+                    "--base-url", "https://example.com/",
+                    "--output", str(out_manifest),
+                    "--schema", str(schema_file))
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "Building manifest" in stdout
+    assert "OK artifact" in stdout
+    assert "modid=testmod" in stdout
+    assert "variantIndex=0" in stdout
+    assert "fileName=testmod.jar" in stdout
+    assert "version=1.0.0" in stdout
+    assert "downloadType=hosted" in stdout
+    assert "size=" in stdout
+    assert "source=local" in stdout
+    assert "Schema validation passed" in stdout
+    assert "Manifest written" in stdout
+    assert out_manifest.is_file()
+
+
+def test_build_no_progress(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    jar_file = tmp_path / "testmod.jar"
+    with zipfile.ZipFile(jar_file, "w") as zf:
+        zf.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n")
+        zf.writestr("Dummy.class", b'\x00')
+
+    schema_file = tmp_path / "schema.json"
+    schema_data = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "additionalProperties": True
+    }
+    schema_file.write_text(json.dumps(schema_data))
+
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    res = runner("--workspace", str(ws_file), "add-hosted", "testmod",
+                 "--file", str(jar_file), "--url", "mods/testmod.jar",
+                 "--version", "1.0.0", "--loader", "fabric")
+    assert res.returncode == 0
+
+    out_manifest = tmp_path / "manifest.json"
+    result = runner("--workspace", str(ws_file), "build",
+                    "--base-url", "https://example.com/",
+                    "--output", str(out_manifest),
+                    "--schema", str(schema_file),
+                    "--no-progress")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "Building manifest" not in stdout
+    assert "OK" not in stdout
+    assert "Schema validation passed" not in stdout
+    assert "Manifest written" in stdout
+    assert out_manifest.is_file()

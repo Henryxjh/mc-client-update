@@ -4,7 +4,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Callable
 
 from mcumanifest.hashing import file_size, hash_file_many
 from mcumanifest.licenses import hosted_allowed
@@ -59,11 +59,19 @@ def add_or_update_variant(
 
 
 def build_manifest(
-    workspace: Dict[str, Any], allow_redistribution: bool = False
+    workspace: Dict[str, Any],
+    allow_redistribution: bool = False,
+    progress_callback: Optional[Callable[[dict], None]] = None,
 ) -> Dict[str, Any]:
     """Build a final manifest dictionary from *workspace*.
 
-    The returned dict strictly follows the schema described in
+    If *progress_callback* is not ``None``, it will be called for every
+    successfully built artifact with an event dict holding at least the
+    following keys: ``event`` (``"artifact_built"``), ``modid``,
+    ``variantIndex``, ``fileName``, ``version``, ``downloadType``,
+    ``size``, and ``source`` (``"downloaded"`` or ``"local"``).
+
+    The returned dictionary strictly follows the schema described in
     ``docs/client-update-manifest.schema.json``.
     """
     manifest: Dict[str, Any] = {
@@ -278,6 +286,23 @@ def build_manifest(
                 "artifact": artifact,
             }
             built_variants.append(variant_entry)
+
+            if progress_callback is not None:
+                if dl_type == "direct" and not explicit_local and use_temp:
+                    source = "downloaded"
+                else:
+                    source = "local"
+                event_dict = {
+                    "event": "artifact_built",
+                    "modid": modid,
+                    "variantIndex": idx,
+                    "fileName": fileName,
+                    "version": artifact["version"],
+                    "downloadType": dl_type,
+                    "size": size_val,
+                    "source": source,
+                }
+                progress_callback(event_dict)
 
         mod_entry["variants"] = built_variants
         manifest["mods"][modid] = mod_entry
