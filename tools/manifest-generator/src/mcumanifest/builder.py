@@ -1,10 +1,16 @@
 import datetime
 import os
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict
 
 from mcumanifest.hashing import file_size, hash_file_many
 from mcumanifest.licenses import hosted_allowed
 from mcumanifest.workspace import normalize_selector, selector_equal
+
+_USER_AGENT = "mcumanifest/1.0"
 
 
 def add_or_update_variant(
@@ -64,7 +70,9 @@ def build_manifest(
         "schemaVersion": 1,
         "manifestId": workspace.get("manifestId", "generated"),
         "revision": workspace.get("revision", 1),
-        "generatedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generatedAt": datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
         "minecraftVersion": workspace.get("minecraftVersion", "1.21.1"),
         "mods": {},
     }
@@ -104,16 +112,6 @@ def build_manifest(
 
         built_variants = []
         for idx, var_data in enumerate(mod_data.get("variants", [])):
-            # ---------- local file (required for hash computation) ----------
-            local_file = var_data.get("localFile")
-            if not local_file or not os.path.isfile(local_file):
-                raise ValueError(
-                    f"Missing local file for mod '{modid}' variant {idx}: {local_file}"
-                )
-            # ---------- hashes ----------
-            hashes = hash_file_many(local_file, ["sha256", "sha512"])
-            size_val = file_size(local_file)
-
             # ---------- download information ----------
             download_raw = var_data.get("download")
             if not download_raw:
@@ -121,8 +119,143 @@ def build_manifest(
                     f"No download information for mod '{modid}' variant {idx}"
                 )
             dl_type = download_raw.get("type")
+
+            # ---------- resolve the file to compute hashes ----------
+            local_file_raw = var_data.get("localFile")
+            # Normalize to a non-empty string, or None
+            explicit_local = (
+                str(local_file_raw).strip()
+                if local_file_raw is not None and str(local_file_raw).strip() != ""
+                else None
+            )
+            compute_path = None
+            use_temp = False
+
+            if dl_type in ("hosted", "manual"):
+                # Hosted / manual *must* have a local file that exists
+                if not explicit_local or not os.path.isfile(explicit_local):
+                    raise ValueError(
+                        f"Missing local file for mod '{modid}' variant {idx}"
+                    )
+                compute_path = explicit_local
+            elif dl_type == "direct":
+                if explicit_local is not None:
+                    # User provided an explicit local file; if it exists use it,
+                    # otherwise raise (never fall back to downloading).
+                    if not os.path.isfile(explicit_local):
+                        raise ValueError(
+                            f"Missing local file for mod '{modid}' variant {idx}"
+                        )
+                    compute_path = explicit_local
+                else:
+                    # No local file – download to a temporary file
+                    url = download_raw.get("url")
+                    if not url:
+                        raise ValueError(
+                            f"Direct download URL for mod '{modid}' variant {idx} is missing"
+                        )
+                    # Validate that the URL is an absolute http(s) URL
+                    parsed = urllib.parse.urlparse(url)
+                    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                        raise ValueError(
+                            f"Direct download URL for mod '{modid}' variant {idx} "
+                            "must be an absolute http or https URL"
+                        )
+
+                    tmp_file = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".jar"
+                    )
+                    tmp_path = tmp_file.name
+                    try:
+                        req = urllib.request.Request(
+                            url, headers={"User-Agent": _USER_AGENT}
+                        )
+                        with urllib.request.urlopen(req) as response:
+                            if response.status != 200:
+                                raise urllib.error.HTTPError(
+                                    url,
+                                    response.status,
+                                    "Not OK",
+                                    response.headers,
+                                    None,
+                                )
+                            # Chunked read – avoid reading the whole file into memory
+                            while True:
+                                chunk = response.read(8192)
+                                if not chunk:
+                                    break
+                                tmp_file.write(chunk)
+                            tmp_file.flush()
+                    except urllib.error.HTTPError as e:
+                        # Clean up the temporary file
+                        try:
+                            tmp_file.close()
+                        except OSError:
+                            pass
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+                        raise ValueError(
+                            f"Download for mod '{modid}' variant {idx} returned HTTP {e.code}"
+                            " (expected 200)"
+                        ) from e
+                    except Exception as e:
+                        try:
+                            tmp_file.close()
+                        except OSError:
+                            pass
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+                        raise ValueError(
+                            f"Download for mod '{modid}' variant {idx} failed: {e}"
+                        ) from e
+                    else:
+                        tmp_file.close()
+                        compute_path = tmp_path
+                        use_temp = True
+            else:
+                raise ValueError(
+                    f"Unsupported download type '{dl_type}' for mod '{modid}' variant {idx}"
+                )
+
+            # ---------- compute hashes and size ----------
+            try:
+                hashes = hash_file_many(compute_path, ["sha256", "sha512"])
+                size_val = file_size(compute_path)
+            finally:
+                if use_temp:
+                    try:
+                        os.unlink(compute_path)
+                    except OSError:
+                        pass
+
+            # ---------- infer fileName if missing ----------
+            fileName = var_data.get("fileName")
+            if not fileName:
+                if dl_type == "direct":
+                    url = download_raw.get("url")
+                    if url:
+                        parsed_path = (
+                            urllib.parse.urlparse(url).path
+                        )
+                        base = os.path.basename(parsed_path.rstrip("/") or "")
+                        if base and base != "/":
+                            fileName = base
+                        else:
+                            fileName = f"{modid}.jar"
+                    else:
+                        fileName = f"{modid}.jar"
+                else:
+                    fileName = f"{modid}.jar"
+
+            # ---------- license check for hosted ----------
             if dl_type == "hosted":
-                mod_allow = bool(mod_data.get("allowRedistribution", allow_redistribution))
+                mod_allow = bool(
+                    mod_data.get("allowRedistribution", allow_redistribution)
+                )
                 if not hosted_allowed(license_val, mod_allow):
                     raise ValueError(
                         f"License for mod '{modid}' does not allow hosted redistribution"
@@ -130,9 +263,7 @@ def build_manifest(
 
             artifact: Dict[str, Any] = {
                 "version": var_data.get("version", "0.0.0"),
-                "fileName": var_data.get(
-                    "fileName", os.path.basename(local_file)
-                ),
+                "fileName": fileName,
                 "size": size_val,
                 "hashes": {
                     "sha256": hashes["sha256"],

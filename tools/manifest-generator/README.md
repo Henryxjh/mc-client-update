@@ -179,7 +179,7 @@ mcumanifest completion fish
 - `init`：创建 `manifest-workspace.json`。若文件已存在，必须询问是否覆盖；非交互环境默认失败。
 - `scan`：读取 `installed-mods.json`，把采集到的 mod 合并进 workspace。
 - `add-hosted`：添加托管在自有 HTTP/HTTPS 服务上的文件。
-- `add-direct`：添加绝对直链下载文件。
+- `add-direct`：添加绝对直链下载文件。`--file` 可选；若省略 `--file`，在 `build` 阶段会从 `--url` 临时下载文件以计算 `size`、`sha256`、`sha512`；`fileName` 将由 URL 路径的 basename 自动推断，若无 basename 则使用 `<modid>.jar`。
 - `add-manual`：添加手动更新项，不生成自动下载 URL。
 - `remove`：删除指定 modid，或删除指定 selector 对应的 variant。
 - `list`：以表格展示当前 workspace。
@@ -337,10 +337,16 @@ CLI 示例：
 mcumanifest add-direct sodium --file mods/sodium.jar --url https://cdn.example.com/sodium.jar --loader fabric
 ```
 
+或省略本地文件，由生成器自行下载：
+
+```bash
+mcumanifest add-direct sodium --url https://cdn.example.com/sodium.jar --loader fabric --version 1.0.5
+```
+
 规则：
 
 - `--url` 必须是绝对 HTTP(S) URL。
-- `--file` 仍用于本地计算 hash/size，保证客户端下载后可校验。
+- `--file` 可选；如果提供，则用于本地计算 hash/size。若省略，`build` 阶段会从 `--url` 下载文件到临时目录以计算 `size`、`sha256`、`sha512`，完成后立即清理；`fileName` 将从 URL 路径的 basename 自动推断，若 URL 路径无 basename 则使用 `<modid>.jar`。
 - 可选记录 `provider`、`projectId`、`versionId`。
 
 ### manual

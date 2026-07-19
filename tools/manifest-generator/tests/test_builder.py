@@ -1,6 +1,9 @@
+import hashlib
+import http.server
 import json
 import os
 import tempfile
+import threading
 
 import pytest
 
@@ -315,3 +318,148 @@ def test_build_rejects_blank_skip_if_installed_version_greater_than(ws):
         with pytest.raises(ValueError, match="must not be blank"):
             build_manifest(ws)
     os.unlink(tf.name)
+
+
+# ---------------------------------------------------------------------------
+# Tests for direct-download without local file
+# ---------------------------------------------------------------------------
+
+class _QuietStaticHandler(http.server.SimpleHTTPRequestHandler):
+    """A quiet handler that serves files from a given directory."""
+
+    def __init__(self, *args, directory=None, **kwargs):
+        super().__init__(*args, directory=directory, **kwargs)
+
+    def log_message(self, format, *args):
+        # suppress access logs in tests
+        pass
+
+
+@pytest.fixture
+def direct_http_server(tmp_path):
+    """Start a local HTTP server serving a jar file. Yields (url, server, content)."""
+    import functools
+
+    jar_dir = tmp_path / "files"
+    jar_dir.mkdir()
+    content = b"hello-from-server"
+    jar_path = jar_dir / "mod.jar"
+    jar_path.write_bytes(content)
+
+    server = http.server.HTTPServer(
+        ("127.0.0.1", 0),
+        functools.partial(_QuietStaticHandler, directory=jar_dir),
+    )
+    port = server.server_address[1]
+    url = f"http://127.0.0.1:{port}/mod.jar"
+
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    yield url, server, content
+
+    server.shutdown()
+    thread.join(timeout=2)
+
+
+def test_build_direct_download_no_local_file(ws, direct_http_server):
+    url, server, content = direct_http_server
+
+    variant = {
+        "selector": {},
+        "priority": 0,
+        "version": "1.0",
+        "localFile": None,
+        "fileName": "",  # will be inferred
+        "download": {"type": "direct", "url": url},
+    }
+    ws["mods"] = {
+        "testdirect": {
+            "name": "Test Direct",
+            "required": True,
+            "license": "mit",
+            "variants": [variant],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    manifest = build_manifest(ws)
+    mod = manifest["mods"]["testdirect"]
+    built_variant = mod["variants"][0]
+    artifact = built_variant["artifact"]
+
+    assert artifact["size"] == len(content)
+    assert artifact["hashes"]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert artifact["hashes"]["sha512"] == hashlib.sha512(content).hexdigest()
+    assert artifact["fileName"] == "mod.jar"
+
+    # ensure localFile does NOT leak into the manifest
+    assert "localFile" not in built_variant
+    assert "localFile" not in artifact
+    assert "localFile" not in manifest["mods"]["testdirect"]
+
+
+def test_build_direct_download_failure(ws):
+    """Downloading from a closed port must raise ValueError."""
+    variant = {
+        "selector": {},
+        "priority": 0,
+        "version": "1.0",
+        "localFile": None,
+        "fileName": "fail.jar",
+        "download": {"type": "direct", "url": "http://127.0.0.1:19999/no-such.jar"},
+    }
+    ws["mods"] = {
+        "faildirect": {
+            "name": "Fail",
+            "required": False,
+            "license": "mit",
+            "variants": [variant],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    with pytest.raises(
+        ValueError, match="Download for mod 'faildirect' variant"
+    ):
+        build_manifest(ws)
+
+
+def test_build_hosted_without_local_file_still_fails(ws):
+    """Hosted downloads MUST still have a local file; direct path is unchanged."""
+    ws["mods"] = {
+        "nofile": {
+            "name": "NoFile",
+            "required": True,
+            "license": "mit",
+            "variants": [
+                {
+                    "selector": {},
+                    "priority": 0,
+                    "version": "1.0",
+                    "localFile": None,
+                    "fileName": "nope.jar",
+                    "download": {"type": "hosted", "url": "https://example.com/nope.jar"},
+                }
+            ],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    with pytest.raises(ValueError, match="Missing local file for mod 'nofile'"):
+        build_manifest(ws)
+
+
+def test_direct_with_missing_local_file_raises(ws):
+    """Direct download with a given localFile that does not exist must raise Missing local file ValueError."""
+    variant = make_variant("/nonexistent/path.jar", download_type="direct")
+    ws["mods"] = {
+        "missingdirect": {
+            "name": "MissingDirect",
+            "required": True,
+            "license": "mit",
+            "variants": [variant],
+        }
+    }
+    with pytest.raises(ValueError, match="Missing local file for mod 'missingdirect'"):
+        build_manifest(ws)

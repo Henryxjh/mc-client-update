@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+from urllib.parse import urlparse
 
 from mcumanifest import builder, constants, validator, workspace
 
@@ -76,17 +77,20 @@ def _add_variant(args, dl_type):
     variant = {
         "selector": sel,
         "version": args.version,
-        "fileName": os.path.basename(args.file) if args.file else f"{args.modid}.jar",
         "localFile": args.file if args.file else None,
         "download": {},
     }
 
+    # --- download type specific parts ---
     if dl_type == "hosted":
         variant["download"]["type"] = "hosted"
         variant["download"]["url"] = args.url
+        if not args.file:
+            print("Error: --file is required for hosted downloads", file=sys.stderr)
+            sys.exit(1)
     elif dl_type == "direct":
         url = args.url
-        if not url.startswith("http://") and not url.startswith("https://"):
+        if not url.startswith(("http://", "https://")):
             print(
                 "Error: --url must start with http:// or https:// for direct downloads",
                 file=sys.stderr,
@@ -94,7 +98,6 @@ def _add_variant(args, dl_type):
             sys.exit(1)
         variant["download"]["type"] = "direct"
         variant["download"]["url"] = url
-        # optional provider metadata
         provider = getattr(args, "provider", None)
         if provider:
             variant["download"]["provider"] = provider
@@ -109,6 +112,22 @@ def _add_variant(args, dl_type):
         variant["download"]["pageUrl"] = args.page_url
         if args.message:
             variant["download"]["message"] = args.message
+
+    # --- determine fileName ---
+    if args.file:
+        variant["fileName"] = os.path.basename(args.file)
+    else:
+        if dl_type == "direct":
+            # infer from URL
+            parsed = urlparse(args.url)
+            url_path = parsed.path.rstrip("/")
+            base = os.path.basename(url_path) if url_path and url_path != "/" else ""
+            if base and base != "/":
+                variant["fileName"] = base
+            else:
+                variant["fileName"] = f"{args.modid}.jar"
+        else:
+            variant["fileName"] = f"{args.modid}.jar"
 
     ret = builder.add_or_update_variant(
         ws,
@@ -416,7 +435,7 @@ def main():
 
     p_direct = sub.add_parser("add-direct", help="Add a direct-download artifact")
     p_direct.add_argument("modid", help="Mod identifier")
-    p_direct.add_argument("--file", required=True, help="Local JAR file")
+    p_direct.add_argument("--file", default=None, help="Local JAR file (optional for direct downloads; if omitted, file will be downloaded in build)")
     p_direct.add_argument("--version", required=True, help="Artifact version")
     p_direct.add_argument("--url", required=True, help="Absolute HTTPS(S) URL")
     p_direct.add_argument(

@@ -176,3 +176,47 @@ def test_set_version_policy_rejects_blank_version(tmp_path, runner):
                  "testmod", "--skip-if-installed-version-greater-than", " ")
     assert res.returncode != 0
     assert "must not be blank" in res.stderr.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests for add-direct without --file
+# ---------------------------------------------------------------------------
+
+def test_add_direct_no_file_writes_workspace(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    result = runner("--workspace", str(ws_file), "add-direct", "sodium",
+                    "--version", "1.0", "--url", "https://example.com/path/to/mod.jar")
+    assert result.returncode == 0
+
+    ws_data = json.loads(ws_file.read_text())
+    mod = ws_data["mods"]["sodium"]
+    assert mod["name"] == "sodium"
+    assert len(mod["variants"]) == 1
+    var = mod["variants"][0]
+    assert var["localFile"] is None
+    # fileName is inferred from URL basename
+    assert var["fileName"] == "mod.jar"
+    download = var["download"]
+    assert download["type"] == "direct"
+    assert download["url"] == "https://example.com/path/to/mod.jar"
+
+
+def test_add_direct_infers_file_name_when_url_has_no_basename(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    # URL path is just '/', so no basename
+    result = runner("--workspace", str(ws_file), "add-direct", "noext",
+                    "--version", "2.0", "--url", "https://cdn.example.com/")
+    assert result.returncode == 0
+
+    ws_data = json.loads(ws_file.read_text())
+    var = ws_data["mods"]["noext"]["variants"][0]
+    assert var["localFile"] is None
+    # fallback: <modid>.jar
+    assert var["fileName"] == "noext.jar"
+    assert var["download"]["url"] == "https://cdn.example.com/"
