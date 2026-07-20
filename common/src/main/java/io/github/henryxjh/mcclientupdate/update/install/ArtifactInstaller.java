@@ -10,6 +10,7 @@ import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.update.Hashing;
 import io.github.henryxjh.mcclientupdate.update.JarTransaction;
+import io.github.henryxjh.mcclientupdate.ui.UpdateProgressDisplay;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -67,64 +68,8 @@ public final class ArtifactInstaller {
             }
         }
 
-        for (int i = 0; i < deleteCandidates.size(); i++) {
-            UpdateCandidate del = deleteCandidates.get(i);
-            if (Thread.currentThread().isInterrupted()) {
-                installDeleteFailure(failures, del,
-                        InstallFailure.InstallFailureCategory.INTERRUPTED, "Install interrupted");
-                markRemainingDeletedInterrupted(failures, deleteCandidates, i + 1);
-                break;
-            }
-            InstalledMod installedMod = del.installed().orElse(null);
-            if (installedMod == null) {
-                installDeleteFailure(failures, del,
-                        InstallFailure.InstallFailureCategory.IO_ERROR, "No installed mod for DELETE");
-                continue;
-            }
-            Path originalJar = installedMod.file();
-            String fileName = originalJar.getFileName().toString();
-            String version = installedMod.version();
-
-            Path backupPath = originalJar.resolveSibling(
-                    "." + fileName + DELETE_SUFFIX);
-
-            if (Files.exists(backupPath)) {
-                installDeleteFailure(failures, del,
-                        InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
-                        "Backup file already exists");
-                continue;
-            }
-
-            try {
-                try {
-                    Files.move(originalJar, backupPath,
-                            StandardCopyOption.ATOMIC_MOVE);
-                } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(originalJar, backupPath);
-                }
-                String installedRelPath = gameDirectory.relativize(originalJar)
-                        .toString().replace('\\', '/');
-                String backupRelPath = gameDirectory.relativize(backupPath)
-                        .toString().replace('\\', '/');
-                InstalledArtifact deleteRecord = new InstalledArtifact(
-                        List.of(del.modId()),
-                        fileName,
-                        version,
-                        "delete",
-                        "DELETE",
-                        installedRelPath,
-                        Optional.of(backupRelPath));
-                installedList.add(deleteRecord);
-            } catch (IOException e) {
-                installDeleteFailure(failures, del,
-                        InstallFailure.InstallFailureCategory.IO_ERROR,
-                        installFailureMessage("I/O error while deleting mod", e));
-            }
-        }
-
-        // Build canonical tasks (ADD / REPLACE only)
+        // Build canonical tasks early to count total items for progress display
         Map<String, InstallTarget> canonicalMap = new LinkedHashMap<>();
-
         for (UpdateCandidate candidate : otherCandidates) {
             DownloadedArtifact downloaded = modIdToDownloaded.get(candidate.modId());
             if (downloaded == null) {
@@ -150,7 +95,72 @@ public final class ArtifactInstaller {
             }
         }
 
-        // Convert to ordered list
+        int totalInstallItems = deleteCandidates.size() + canonicalMap.size();
+        UpdateProgressDisplay.installPhaseStart(totalInstallItems);
+
+        for (int i = 0; i < deleteCandidates.size(); i++) {
+            UpdateCandidate del = deleteCandidates.get(i);
+            if (Thread.currentThread().isInterrupted()) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.INTERRUPTED, "Install interrupted");
+                UpdateProgressDisplay.itemFail("Interrupted");
+                markRemainingDeletedInterrupted(failures, deleteCandidates, i + 1);
+                break;
+            }
+            InstalledMod installedMod = del.installed().orElse(null);
+            if (installedMod == null) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.IO_ERROR, "No installed mod for DELETE");
+                UpdateProgressDisplay.itemFail("No installed mod");
+                continue;
+            }
+            Path originalJar = installedMod.file();
+            String fileName = originalJar.getFileName().toString();
+            String version = installedMod.version();
+
+            UpdateProgressDisplay.itemStart(del.modId(), 0, "DELETE");
+
+            Path backupPath = originalJar.resolveSibling(
+                    "." + fileName + DELETE_SUFFIX);
+
+            if (Files.exists(backupPath)) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
+                        "Backup file already exists");
+                UpdateProgressDisplay.itemFail("Backup file already exists");
+                continue;
+            }
+
+            try {
+                try {
+                    Files.move(originalJar, backupPath,
+                            StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(originalJar, backupPath);
+                }
+                String installedRelPath = gameDirectory.relativize(originalJar)
+                        .toString().replace('\\', '/');
+                String backupRelPath = gameDirectory.relativize(backupPath)
+                        .toString().replace('\\', '/');
+                InstalledArtifact deleteRecord = new InstalledArtifact(
+                        List.of(del.modId()),
+                        fileName,
+                        version,
+                        "delete",
+                        "DELETE",
+                        installedRelPath,
+                        Optional.of(backupRelPath));
+                installedList.add(deleteRecord);
+                UpdateProgressDisplay.itemOk("deleted (backup kept)");
+            } catch (IOException e) {
+                installDeleteFailure(failures, del,
+                        InstallFailure.InstallFailureCategory.IO_ERROR,
+                        installFailureMessage("I/O error while deleting mod", e));
+                UpdateProgressDisplay.itemFail("I/O error");
+            }
+        }
+
+        // Convert to ordered list (canonicalMap already built above)
         List<InstallTarget> orderedTasks = new ArrayList<>(canonicalMap.values());
 
         for (int idx = 0; idx < orderedTasks.size(); idx++) {
@@ -161,6 +171,19 @@ public final class ArtifactInstaller {
                 break;
             }
 
+            // Determine action for progress display
+            boolean replace = task.hasHashMismatch && !task.hasMissingRequired;
+            boolean add = task.hasMissingRequired && !replace;
+            String actionLabel;
+            if (replace) {
+                actionLabel = "REPLACE, hash verified";
+            } else if (add) {
+                actionLabel = "ADD";
+            } else {
+                actionLabel = "UNKNOWN";
+            }
+            UpdateProgressDisplay.itemStart(task.canonicalFileName, 0, actionLabel);
+
             // Conflict detection
             boolean conflict = false;
             if (task.hasMissingRequired && Files.exists(task.targetPath)) {
@@ -170,15 +193,12 @@ public final class ArtifactInstaller {
                         task,
                         InstallFailure.InstallFailureCategory.TARGET_CONFLICT,
                         "File already exists");
+                UpdateProgressDisplay.itemFail("File already exists");
                 conflict = true;
             }
             if (conflict) {
                 continue;
             }
-
-            // Determine action
-            boolean replace = task.hasHashMismatch && !task.hasMissingRequired;
-            boolean add = task.hasMissingRequired && !replace;
 
             if (!add && !replace) {
                 // Unexpected state
@@ -271,6 +291,7 @@ public final class ArtifactInstaller {
                                 installedRel,
                                 Optional.of(backupRel));
                         installedList.add(artifactRecord);
+                        UpdateProgressDisplay.itemOk("installed, old version backed up");
                     } else {
                         // Rename replacement: target path differs from current jar
                         Path oldJar = task.originalInstalledJar;
@@ -356,6 +377,7 @@ public final class ArtifactInstaller {
                                 installedRel,
                                 Optional.of(backupRel));
                         installedList.add(artifactRecord);
+                        UpdateProgressDisplay.itemOk("installed, old version backed up");
                     }
                 } else {
                     // ADD: move pending to final location
@@ -408,6 +430,7 @@ public final class ArtifactInstaller {
                             installedRel,
                             Optional.empty());
                     installedList.add(addRecord);
+                    UpdateProgressDisplay.itemOk("installed");
                 }
             } catch (IOException e) {
                 if (Thread.currentThread().isInterrupted()) {
@@ -428,6 +451,8 @@ public final class ArtifactInstaller {
                 }
             }
         }
+
+        UpdateProgressDisplay.installPhaseDone(installedList.size(), failures.size());
 
         return new InstallBatchResult(
                 manifest.manifestId(),
@@ -468,6 +493,7 @@ public final class ArtifactInstaller {
                 target.downloaded.sourceType(),
                 category,
                 message));
+        UpdateProgressDisplay.itemFail(message);
     }
 
     private static void markRemainingInterrupted(
@@ -476,6 +502,7 @@ public final class ArtifactInstaller {
             int startIdx) {
         for (int i = startIdx; i < tasks.size(); i++) {
             InstallTarget remaining = tasks.get(i);
+            UpdateProgressDisplay.itemStart(remaining.canonicalFileName, 0, "");
             installFailure(failures, remaining,
                     InstallFailure.InstallFailureCategory.INTERRUPTED,
                     "Install interrupted");
@@ -594,7 +621,10 @@ public final class ArtifactInstaller {
             List<UpdateCandidate> deleteCandidates,
             int startIdx) {
         for (int i = startIdx; i < deleteCandidates.size(); i++) {
-            installDeleteFailure(failures, deleteCandidates.get(i),
+            UpdateCandidate c = deleteCandidates.get(i);
+            UpdateProgressDisplay.itemStart(c.modId(), 0, "DELETE");
+            UpdateProgressDisplay.itemFail("Interrupted");
+            installDeleteFailure(failures, c,
                     InstallFailure.InstallFailureCategory.INTERRUPTED,
                     "Install interrupted");
         }

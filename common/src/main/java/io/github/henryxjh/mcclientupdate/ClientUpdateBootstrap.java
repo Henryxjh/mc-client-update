@@ -29,6 +29,7 @@ import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
 import io.github.henryxjh.mcclientupdate.ui.UpdateAttentionDialog;
 import io.github.henryxjh.mcclientupdate.ui.UpdateAttentionMessage;
+import io.github.henryxjh.mcclientupdate.ui.UpdateProgressDisplay;
 import io.github.henryxjh.mcclientupdate.update.install.ArtifactInstaller;
 import io.github.henryxjh.mcclientupdate.update.install.InstallBatchResult;
 import io.github.henryxjh.mcclientupdate.update.install.InstallFailure;
@@ -119,19 +120,22 @@ public final class ClientUpdateBootstrap {
                     + " targetVersion=" + version);
         }
 
+        UpdateProgressDisplay.start(platform);
         DownloadBatchResult batchResult;
+        InstallBatchResult installResult;
         try {
-            URI manifestUri = config.manifestUri().orElseThrow();
-            batchResult = ArtifactDownloader.downloadBatch(
-                    manifest, manifestUri, scanResult, platform.gameDirectory(),
-                    config.connectTimeout(), config.readTimeout());
-        } catch (Exception e) {
-            platform.log("Download phase failed: " + e.getMessage());
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
+            try {
+                URI manifestUri = config.manifestUri().orElseThrow();
+                batchResult = ArtifactDownloader.downloadBatch(
+                        manifest, manifestUri, scanResult, platform.gameDirectory(),
+                        config.connectTimeout(), config.readTimeout());
+            } catch (Exception e) {
+                platform.log("Download phase failed: " + e.getMessage());
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                }
+                throw new DownloadException("Download phase failed", e);
             }
-            throw new DownloadException("Download phase failed", e);
-        }
 
         platform.log("Downloaded: " + batchResult.downloaded().size()
                 + " failed: " + batchResult.failed().size()
@@ -148,7 +152,6 @@ public final class ClientUpdateBootstrap {
                     + " pageUrl=" + manual.pageUrl() + " msg=" + manual.message());
         }
 
-        InstallBatchResult installResult;
         try {
             installResult = ArtifactInstaller.installBatch(manifest, scanResult, batchResult, platform.gameDirectory());
         } catch (Exception e) {
@@ -196,6 +199,9 @@ public final class ClientUpdateBootstrap {
             }
         }
         // ---------------------------------------------------
+        } finally {
+            UpdateProgressDisplay.stop();
+        }
 
         String attentionText = UpdateAttentionMessage.formatMessage(
                 batchResult.manualUpdates(),

@@ -10,6 +10,7 @@ import io.github.henryxjh.mcclientupdate.manifest.Variant;
 import io.github.henryxjh.mcclientupdate.scan.ScanResult;
 import io.github.henryxjh.mcclientupdate.scan.UpdateCandidate;
 import io.github.henryxjh.mcclientupdate.update.Hashing;
+import io.github.henryxjh.mcclientupdate.ui.UpdateProgressDisplay;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,7 +47,7 @@ public final class ArtifactDownloader {
         INTERRUPTED
     }
 
-    private static final String USER_AGENT = "mc-client-update/0.1.0";
+    private static final String USER_AGENT = "mc-client-update/0.2.0";
     private static final String STAGING_DIR = ".mc-client-update/downloads";
     private static final int BUFFER_SIZE = 64 * 1024;
 
@@ -120,6 +121,13 @@ public final class ArtifactDownloader {
             }
         }
 
+        // Progress: start download phase
+        long phaseTotalBytes = 0;
+        for (Artifact a : orderedArtifacts) {
+            phaseTotalBytes += a.size();
+        }
+        UpdateProgressDisplay.downloadPhaseStart(orderedArtifacts.size(), phaseTotalBytes);
+
         for (int idx = 0; idx < orderedArtifacts.size(); idx++) {
             Artifact artifact = orderedArtifacts.get(idx);
             List<String> modIds = List.copyOf(artifactToModIds.get(artifact));
@@ -180,10 +188,13 @@ public final class ArtifactDownloader {
                 }
 
                 if (cacheValid) {
+                    String sourceLabel = buildSourceLabel(artifact.download());
+                    UpdateProgressDisplay.itemStart(fileName, expectedSize, sourceLabel);
                     String relativePath = gameDirectory.relativize(destFile).toString()
                             .replace('\\', '/');
                     downloaded.add(new DownloadedArtifact(modIds, fileName, version, sourceType,
                             destFile, relativePath));
+                    UpdateProgressDisplay.itemOk("downloaded (cached), sha256 verified");
                     continue;
                 } else {
                     try {
@@ -205,12 +216,17 @@ public final class ArtifactDownloader {
                         modIds, fileName, version, sourceType,
                         FailureCategory.IO_ERROR.name(),
                         failureMessage("I/O error while creating destination directory", e)));
+                UpdateProgressDisplay.itemFail("I/O error creating directory");
                 continue;
             }
 
             Path partFile = null;
             boolean committed = false;
             try {
+
+                // Report item start before network operations
+                String sourceLabel = buildSourceLabel(artifact.download());
+                UpdateProgressDisplay.itemStart(fileName, expectedSize, sourceLabel);
 
                 URI downloadUri;
                 try {
@@ -220,6 +236,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             failureMessage("Invalid download URL while resolving", e)));
+                    UpdateProgressDisplay.itemFail("Invalid download URL");
                     continue;
                 }
 
@@ -228,6 +245,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             "Invalid download URL"));
+                    UpdateProgressDisplay.itemFail("Invalid download URL");
                     continue;
                 }
 
@@ -242,6 +260,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             "Direct URL must be absolute"));
+                    UpdateProgressDisplay.itemFail("Direct URL must be absolute");
                     continue;
                 }
 
@@ -253,6 +272,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             "Invalid download URL"));
+                    UpdateProgressDisplay.itemFail("Invalid download URL");
                     continue;
                 }
 
@@ -270,6 +290,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             failureMessage("Invalid download URL while constructing request", e)));
+                    UpdateProgressDisplay.itemFail("Invalid download URL");
                     continue;
                 }
 
@@ -283,6 +304,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.INTERRUPTED.name(),
                             "Download interrupted"));
+                    UpdateProgressDisplay.itemFail("Interrupted");
                     markRemainingInterrupted(failures, orderedArtifacts, artifactToModIds,
                             idx + 1);
                     break;
@@ -291,6 +313,7 @@ public final class ArtifactDownloader {
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
                             failureMessage("I/O error while sending request", e)));
+                    UpdateProgressDisplay.itemFail("I/O error");
                     continue;
                 }
 
@@ -301,6 +324,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.HTTP_STATUS.name(),
                                 "HTTP " + httpStatus));
+                        UpdateProgressDisplay.itemFail("HTTP " + httpStatus);
                         continue;
                     }
 
@@ -334,6 +358,7 @@ public final class ArtifactDownloader {
                             sha256Digest.update(buf, 0, n);
                             sha512Digest.update(buf, 0, n);
                             totalWritten += n;
+                            UpdateProgressDisplay.downloadProgress(totalWritten);
                         }
                     }
 
@@ -343,6 +368,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.INTERRUPTED.name(),
                                 "Download interrupted"));
+                        UpdateProgressDisplay.itemFail("Interrupted");
                         markRemainingInterrupted(failures, orderedArtifacts, artifactToModIds,
                                 idx + 1);
                         break;
@@ -358,6 +384,7 @@ public final class ArtifactDownloader {
                                     modIds, fileName, version, sourceType,
                                     FailureCategory.INTERRUPTED.name(),
                                     "Download interrupted"));
+                            UpdateProgressDisplay.itemFail("Interrupted");
                             markRemainingInterrupted(failures, orderedArtifacts, artifactToModIds,
                                     idx + 1);
                             break;
@@ -368,6 +395,7 @@ public final class ArtifactDownloader {
                                     modIds, fileName, version, sourceType,
                                     FailureCategory.SIZE_MISMATCH.name(),
                                     "Expected " + expectedSize + " bytes, got at least " + (expectedSize + 1)));
+                            UpdateProgressDisplay.itemFail("Size mismatch");
                             continue;
                         }
                     } else {
@@ -375,6 +403,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.SIZE_MISMATCH.name(),
                                 "Expected " + expectedSize + " bytes, got " + got));
+                        UpdateProgressDisplay.itemFail("Size mismatch");
                         continue;
                     }
 
@@ -389,6 +418,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.HASH_MISMATCH.name(),
                                 "Hash verification failed"));
+                        UpdateProgressDisplay.itemFail("Hash mismatch");
                         continue;
                     }
 
@@ -406,6 +436,7 @@ public final class ArtifactDownloader {
                                     modIds, fileName, version, sourceType,
                                     FailureCategory.IO_ERROR.name(),
                                     failureMessage("I/O error while moving temporary file", moveFallbackError)));
+                            UpdateProgressDisplay.itemFail("I/O error during move");
                             continue;
                         }
                     } catch (IOException e) {
@@ -413,6 +444,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.IO_ERROR.name(),
                                 failureMessage("I/O error while moving temporary file", e)));
+                        UpdateProgressDisplay.itemFail("I/O error during move");
                         continue;
                     }
 
@@ -424,6 +456,7 @@ public final class ArtifactDownloader {
                             .replace('\\', '/');
                     downloaded.add(new DownloadedArtifact(modIds, fileName, version,
                             sourceType, destFile, relativePath));
+                    UpdateProgressDisplay.itemOk("downloaded, sha256 verified");
 
                 } catch (IOException e) {
                     if (Thread.currentThread().isInterrupted()) {
@@ -431,6 +464,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.INTERRUPTED.name(),
                                 "Download interrupted"));
+                        UpdateProgressDisplay.itemFail("Interrupted");
                         markRemainingInterrupted(failures, orderedArtifacts, artifactToModIds,
                                 idx + 1);
                         break;
@@ -439,6 +473,7 @@ public final class ArtifactDownloader {
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.IO_ERROR.name(),
                                 failureMessage("I/O error while reading response body", e)));
+                        UpdateProgressDisplay.itemFail("I/O error");
                     }
                 }
             } finally {
@@ -451,12 +486,28 @@ public final class ArtifactDownloader {
             }
         }
 
+        UpdateProgressDisplay.downloadPhaseDone(
+                downloaded.size(), failures.size(), manualUpdates.size());
+
         return new DownloadBatchResult(
                 manifest.manifestId(),
                 manifest.revision(),
                 List.copyOf(downloaded),
                 List.copyOf(failures),
                 List.copyOf(manualUpdates));
+    }
+
+    private static String buildSourceLabel(Download download) {
+        if (download instanceof HostedDownload) {
+            return "hosted";
+        }
+        if (download instanceof DirectDownload direct) {
+            if (direct.provider().isPresent() && !direct.provider().get().isBlank()) {
+                return "direct (" + direct.provider().get().strip() + ")";
+            }
+            return "direct";
+        }
+        return "unknown";
     }
 
     private static URI resolveDownloadUri(Download download, Manifest manifest, URI manifestUri) {
