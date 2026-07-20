@@ -19,12 +19,10 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import io.github.henryxjh.mcclientupdate.manifest.ModAction;
 
 class ClientUpdateManifestFetcherTest {
 

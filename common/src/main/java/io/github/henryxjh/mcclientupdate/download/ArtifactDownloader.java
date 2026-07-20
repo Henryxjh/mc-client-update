@@ -190,6 +190,7 @@ public final class ArtifactDownloader {
                 if (cacheValid) {
                     String sourceLabel = buildSourceLabel(artifact.download());
                     UpdateProgressDisplay.itemStart(fileName, expectedSize, sourceLabel);
+                    UpdateProgressDisplay.reportModIds(modIds);
                     String relativePath = gameDirectory.relativize(destFile).toString()
                             .replace('\\', '/');
                     downloaded.add(new DownloadedArtifact(modIds, fileName, version, sourceType,
@@ -227,6 +228,7 @@ public final class ArtifactDownloader {
                 // Report item start before network operations
                 String sourceLabel = buildSourceLabel(artifact.download());
                 UpdateProgressDisplay.itemStart(fileName, expectedSize, sourceLabel);
+                UpdateProgressDisplay.reportModIds(modIds);
 
                 URI downloadUri;
                 try {
@@ -275,6 +277,8 @@ public final class ArtifactDownloader {
                     UpdateProgressDisplay.itemFail("Invalid download URL");
                     continue;
                 }
+
+                UpdateProgressDisplay.reportDownloadUrl(downloadUri.toString());
 
                 HttpRequest request;
                 try {

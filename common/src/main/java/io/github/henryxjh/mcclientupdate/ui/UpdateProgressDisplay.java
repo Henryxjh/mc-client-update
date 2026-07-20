@@ -2,16 +2,25 @@ package io.github.henryxjh.mcclientupdate.ui;
 
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 
+import java.awt.GraphicsEnvironment;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JDialog;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
+
 /**
- * Dedicated progress display thread that receives events from the download and
- * install phases and produces real-time log output.
- *
- * <p>Swing progress window support is reserved but not yet implemented.
+ * Dedicated progress display thread with real-time log output and Swing window.
  *
  * <h3>Usage</h3>
  * <pre>{@code
@@ -35,13 +44,16 @@ public final class UpdateProgressDisplay {
     private enum Phase {DOWNLOAD, INSTALL}
 
     private sealed interface Event
-            permits PhaseStart, ItemStart, ProgressTick, ItemDone, PhaseDone, Shutdown {}
+            permits PhaseStart, ItemStart, ProgressTick, ItemDone, PhaseDone,
+                    ItemUrl, ItemModIds, Shutdown {}
 
     private record PhaseStart(Phase phase, int totalItems, long totalBytes) implements Event {}
     private record ItemStart(String name, long totalBytes, String extra) implements Event {}
     private record ProgressTick(long bytesRead) implements Event {}
     private record ItemDone(boolean success, String message) implements Event {}
     private record PhaseDone(int ok, int failed, int manual, long durationMs) implements Event {}
+    private record ItemUrl(String url) implements Event {}
+    private record ItemModIds(List<String> modIds) implements Event {}
     private record Shutdown() implements Event {}
 
     // ---- Internal state -----------------------------------------------
@@ -63,6 +75,33 @@ public final class UpdateProgressDisplay {
     private static long currentItemTotalBytes;
     private static long lastProgressLogMs;
 
+    // Speed tracking
+    private static long lastSpeedSampleBytes;
+    private static long lastSpeedSampleMs;
+    private static String currentSpeedText = "";
+
+    // Per-phase counters for totals display
+    private static int doneCount;
+    private static int failCount;
+    private static int manualCount;
+
+    // Per-item display state
+    private static String currentModIds = "";
+    private static String currentUrl = "";
+    private static String currentExtra = "";
+
+    // Swing window
+    private static boolean swingAvailable;
+    private static JDialog swingDialog;
+    private static JLabel swingTitleLabel;
+    private static JProgressBar swingProgressBar;
+    private static JLabel swingFileLabel;
+    private static JLabel swingSizeSpeedLabel;
+    private static JLabel swingModsLabel;
+    private static JLabel swingSourceLabel;
+    private static JLabel swingUrlLabel;
+    private static JLabel swingTotalLabel;
+
     // ---- Public API ---------------------------------------------------
 
     /**
@@ -73,6 +112,18 @@ public final class UpdateProgressDisplay {
         Objects.requireNonNull(ctx, "platform");
         platform = ctx;
         running = true;
+
+        // Try to create Swing window; degrade gracefully on any failure
+        if (!GraphicsEnvironment.isHeadless()) {
+            try {
+                SwingUtilities.invokeAndWait(UpdateProgressDisplay::createSwingWindow);
+                swingAvailable = true;
+            } catch (Exception e) {
+                platform.log("Swing window unavailable, log-only mode: " + e);
+                swingAvailable = false;
+            }
+        }
+
         displayThread = new Thread(UpdateProgressDisplay::eventLoop,
                 "mc-client-update-progress");
         displayThread.setDaemon(true);
@@ -99,6 +150,8 @@ public final class UpdateProgressDisplay {
         while ((event = QUEUE.poll()) != null) {
             processEvent(event);
         }
+        // Dispose Swing window
+        disposeSwingWindow();
     }
 
     // ---- Phase lifecycle ----------------------------------------------
@@ -151,6 +204,20 @@ public final class UpdateProgressDisplay {
         QUEUE.offer(new ItemDone(false, reason));
     }
 
+    /**
+     * Reports the mod IDs associated with the current download item.
+     */
+    public static void reportModIds(List<String> modIds) {
+        QUEUE.offer(new ItemModIds(List.copyOf(modIds)));
+    }
+
+    /**
+     * Reports the download URL for the current item.
+     */
+    public static void reportDownloadUrl(String url) {
+        QUEUE.offer(new ItemUrl(url));
+    }
+
     // ---- Phase summary ------------------------------------------------
 
     /**
@@ -194,6 +261,10 @@ public final class UpdateProgressDisplay {
             handleItemDone(id);
         } else if (event instanceof PhaseDone pd) {
             handlePhaseDone(pd);
+        } else if (event instanceof ItemUrl iu) {
+            handleItemUrl(iu);
+        } else if (event instanceof ItemModIds im) {
+            handleItemModIds(im);
         }
         // Shutdown is drained in stop()
     }
@@ -203,6 +274,9 @@ public final class UpdateProgressDisplay {
         totalItems = event.totalItems();
         itemIndex = 0;
         phaseStartMs = System.currentTimeMillis();
+        doneCount = 0;
+        failCount = 0;
+        manualCount = 0;
 
         if (event.phase() == Phase.DOWNLOAD) {
             platform.log("--- Download phase: " + event.totalItems() + " files, "
@@ -210,13 +284,21 @@ public final class UpdateProgressDisplay {
         } else {
             platform.log("--- Install phase: " + event.totalItems() + " items ---");
         }
+
+        updateSwingPhase();
     }
 
     private static void handleItemStart(ItemStart event) {
         itemIndex++;
         currentItemName = event.name();
         currentItemTotalBytes = event.totalBytes();
+        currentExtra = event.extra() != null ? event.extra() : "";
         lastProgressLogMs = 0;
+        lastSpeedSampleBytes = 0;
+        lastSpeedSampleMs = 0;
+        currentSpeedText = "";
+        currentModIds = "";
+        currentUrl = "";
 
         String verb = currentPhase == Phase.DOWNLOAD ? "Downloading" : "Installing";
         StringBuilder sb = new StringBuilder();
@@ -236,14 +318,34 @@ public final class UpdateProgressDisplay {
         }
 
         platform.log(sb.toString());
+
+        updateSwingItemStart();
     }
 
     private static void handleProgressTick(ProgressTick event) {
         if (currentItemTotalBytes <= 0) {
             return;
         }
+
+        // Speed calculation (sample every ~1s)
         long now = System.currentTimeMillis();
+        if (lastSpeedSampleMs > 0 && now - lastSpeedSampleMs >= 1000) {
+            long deltaBytes = event.bytesRead() - lastSpeedSampleBytes;
+            long deltaMs = now - lastSpeedSampleMs;
+            if (deltaMs > 0 && deltaBytes >= 0) {
+                double bytesPerSec = deltaBytes * 1000.0 / deltaMs;
+                currentSpeedText = formatSpeed(bytesPerSec);
+            }
+            lastSpeedSampleBytes = event.bytesRead();
+            lastSpeedSampleMs = now;
+        } else if (lastSpeedSampleMs == 0) {
+            lastSpeedSampleBytes = event.bytesRead();
+            lastSpeedSampleMs = now;
+        }
+
+        // Log throttling
         if (lastProgressLogMs > 0 && now - lastProgressLogMs < PROGRESS_LOG_INTERVAL_MS) {
+            updateSwingProgress(event.bytesRead());
             return;
         }
         lastProgressLogMs = now;
@@ -251,18 +353,33 @@ public final class UpdateProgressDisplay {
         int pct = (int) (event.bytesRead() * 100 / currentItemTotalBytes);
         platform.log("  " + currentItemName + "  " + pct + "%  "
                 + formatBytes(event.bytesRead()) + " / " + formatBytes(currentItemTotalBytes));
+
+        updateSwingProgress(event.bytesRead());
     }
 
     private static void handleItemDone(ItemDone event) {
+        if (event.success()) {
+            doneCount++;
+        } else {
+            failCount++;
+        }
+
         String prefix = event.success() ? "  OK " : "  FAIL ";
         if (event.success()) {
             platform.log(prefix + currentItemName + " " + event.message());
         } else {
             platform.log(prefix + currentItemName + ": " + event.message());
         }
+
+        updateSwingItemDone();
     }
 
     private static void handlePhaseDone(PhaseDone event) {
+        // Use event counts as authoritative
+        doneCount = event.ok();
+        failCount = event.failed();
+        manualCount = event.manual();
+
         StringBuilder sb = new StringBuilder();
         sb.append("--- ");
         if (currentPhase == Phase.DOWNLOAD) {
@@ -281,6 +398,257 @@ public final class UpdateProgressDisplay {
         sb.append(" ---");
 
         platform.log(sb.toString());
+
+        updateSwingPhaseDone();
+    }
+
+    private static void handleItemUrl(ItemUrl event) {
+        currentUrl = event.url();
+        updateSwingUrl();
+    }
+
+    private static void handleItemModIds(ItemModIds event) {
+        currentModIds = String.join(", ", event.modIds());
+        updateSwingMods();
+    }
+
+    // ---- Swing window management --------------------------------------
+
+    private static void createSwingWindow() {
+        swingDialog = new JDialog();
+        swingDialog.setTitle("MC Client Update");
+        swingDialog.setUndecorated(true);
+        swingDialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        swingDialog.setAlwaysOnTop(true);
+
+        JPanel root = new JPanel();
+        root.setLayout(new BoxLayout(root, BoxLayout.Y_AXIS));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+
+        // Title
+        swingTitleLabel = new JLabel("MC Client Update");
+        swingTitleLabel.setFont(swingTitleLabel.getFont().deriveFont(14f).deriveFont(java.awt.Font.BOLD));
+        swingTitleLabel.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        root.add(swingTitleLabel);
+        root.add(Box.createVerticalStrut(8));
+
+        // Progress bar
+        swingProgressBar = new JProgressBar(0, 100);
+        swingProgressBar.setStringPainted(true);
+        swingProgressBar.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        swingProgressBar.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE, 26));
+        root.add(swingProgressBar);
+        root.add(Box.createVerticalStrut(8));
+
+        // File name label
+        swingFileLabel = plainLabel("");
+        root.add(swingFileLabel);
+        root.add(Box.createVerticalStrut(2));
+
+        // Size / speed label
+        swingSizeSpeedLabel = plainLabel("");
+        root.add(swingSizeSpeedLabel);
+        root.add(Box.createVerticalStrut(6));
+
+        // Mods label
+        swingModsLabel = plainLabel("");
+        root.add(swingModsLabel);
+        root.add(Box.createVerticalStrut(2));
+
+        // Source label
+        swingSourceLabel = plainLabel("");
+        root.add(swingSourceLabel);
+        root.add(Box.createVerticalStrut(2));
+
+        // URL label
+        swingUrlLabel = plainLabel("");
+        root.add(swingUrlLabel);
+        root.add(Box.createVerticalStrut(6));
+
+        // Total progress label
+        swingTotalLabel = plainLabel("");
+        root.add(swingTotalLabel);
+
+        swingDialog.setContentPane(root);
+        swingDialog.pack();
+        swingDialog.setSize(520, swingDialog.getHeight());
+        swingDialog.setLocationRelativeTo(null);
+        swingDialog.setVisible(true);
+    }
+
+    private static JLabel plainLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(label.getFont().deriveFont(12f));
+        label.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static void disposeSwingWindow() {
+        if (!swingAvailable || swingDialog == null) {
+            return;
+        }
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                if (swingDialog.isDisplayable()) {
+                    swingDialog.dispose();
+                }
+            });
+        } catch (Exception ignored) {
+        }
+        swingAvailable = false;
+    }
+
+    // ---- Swing UI update helpers (called from display thread) ---------
+
+    private static final long SWING_UPDATE_INTERVAL_MS = 100;
+    private static long lastSwingUpdateMs;
+
+    private static void updateSwing(Runnable action) {
+        if (!swingAvailable) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastSwingUpdateMs < SWING_UPDATE_INTERVAL_MS) {
+            return;
+        }
+        lastSwingUpdateMs = now;
+        try {
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    if (swingDialog == null || !swingDialog.isDisplayable()) {
+                        swingAvailable = false;
+                        return;
+                    }
+                    action.run();
+                } catch (Exception e) {
+                    swingAvailable = false;
+                    platform.log("Swing update failed, log-only mode: " + e);
+                }
+            });
+        } catch (Exception e) {
+            swingAvailable = false;
+        }
+    }
+
+    private static void updateSwingPhase() {
+        updateSwing(() -> {
+            String title;
+            if (currentPhase == Phase.DOWNLOAD) {
+                title = "MC Client Update - Downloading...";
+            } else {
+                title = "MC Client Update - Installing...";
+            }
+            swingTitleLabel.setText(title);
+            swingProgressBar.setValue(0);
+            swingProgressBar.setString("0%");
+            swingFileLabel.setText("");
+            swingSizeSpeedLabel.setText("");
+            swingModsLabel.setText("");
+            swingSourceLabel.setText("");
+            swingUrlLabel.setText("");
+            updateSwingTotalLabel();
+        });
+    }
+
+    private static void updateSwingItemStart() {
+        updateSwing(() -> {
+            swingFileLabel.setText(currentItemName);
+            swingSizeSpeedLabel.setText("");
+            swingModsLabel.setText(modsDisplayText());
+            if (currentPhase == Phase.DOWNLOAD) {
+                swingSourceLabel.setText("From: " + currentExtra);
+                swingUrlLabel.setText("");
+                swingSizeSpeedLabel.setVisible(true);
+                swingSourceLabel.setVisible(true);
+                swingUrlLabel.setVisible(true);
+            } else {
+                swingSourceLabel.setText("Action: " + currentExtra);
+                swingSizeSpeedLabel.setVisible(false);
+                swingSourceLabel.setVisible(true);
+                swingUrlLabel.setVisible(false);
+            }
+            swingProgressBar.setValue(0);
+            swingProgressBar.setString("0%");
+            updateSwingTotalLabel();
+        });
+    }
+
+    private static void updateSwingProgress(long bytesRead) {
+        updateSwing(() -> {
+            if (currentPhase != Phase.DOWNLOAD || currentItemTotalBytes <= 0) {
+                return;
+            }
+            int pct = (int) (bytesRead * 100 / currentItemTotalBytes);
+            swingProgressBar.setValue(pct);
+            swingProgressBar.setString(pct + "%");
+            swingSizeSpeedLabel.setText(formatBytes(bytesRead) + " / "
+                    + formatBytes(currentItemTotalBytes)
+                    + (currentSpeedText.isEmpty() ? "" : "    " + currentSpeedText));
+        });
+    }
+
+    private static void updateSwingItemDone() {
+        updateSwing(() -> {
+            if (currentPhase == Phase.INSTALL) {
+                swingProgressBar.setValue(itemIndex * 100 / totalItems);
+                swingProgressBar.setString((itemIndex * 100 / totalItems) + "%");
+            } else {
+                swingProgressBar.setValue(100);
+                swingProgressBar.setString("100%");
+            }
+            updateSwingTotalLabel();
+        });
+    }
+
+    private static void updateSwingPhaseDone() {
+        updateSwing(() -> {
+            swingProgressBar.setValue(100);
+            swingProgressBar.setString("100%");
+            updateSwingTotalLabel();
+        });
+    }
+
+    private static void updateSwingUrl() {
+        updateSwing(() -> {
+            String display;
+            if (currentUrl.length() > 55) {
+                display = currentUrl.substring(0, 55) + "...";
+            } else {
+                display = currentUrl;
+            }
+            swingUrlLabel.setText("URL: " + display);
+            swingUrlLabel.setToolTipText(currentUrl);
+        });
+    }
+
+    private static void updateSwingMods() {
+        updateSwing(() -> {
+            swingModsLabel.setText("Mods: " + modsDisplayText());
+        });
+    }
+
+    private static String modsDisplayText() {
+        if (currentModIds.isEmpty()) {
+            return "";
+        }
+        return currentModIds;
+    }
+
+    private static void updateSwingTotalLabel() {
+        // This runs inside updateSwing's invokeLater, so we directly set text
+        StringBuilder sb = new StringBuilder();
+        if (currentPhase == Phase.DOWNLOAD) {
+            sb.append("Files: ");
+        } else {
+            sb.append("Items: ");
+        }
+        sb.append(itemIndex).append(" / ").append(totalItems);
+        sb.append("    Done: ").append(doneCount);
+        sb.append("  Failed: ").append(failCount);
+        if (currentPhase == Phase.DOWNLOAD) {
+            sb.append("  Manual: ").append(manualCount);
+        }
+        swingTotalLabel.setText(sb.toString());
     }
 
     // ---- Formatting helpers -------------------------------------------
@@ -295,6 +663,17 @@ public final class UpdateProgressDisplay {
         }
         double mb = kb / 1024.0;
         return String.format("%.1f MB", mb);
+    }
+
+    private static String formatSpeed(double bytesPerSec) {
+        if (bytesPerSec < 1024.0) {
+            return String.format("%.0f B/s", bytesPerSec);
+        }
+        double kbPerSec = bytesPerSec / 1024.0;
+        if (kbPerSec < 1024.0) {
+            return String.format("%.1f KB/s", kbPerSec);
+        }
+        return String.format("%.1f MB/s", kbPerSec / 1024.0);
     }
 
     private static String formatDuration(long ms) {
