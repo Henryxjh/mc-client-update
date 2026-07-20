@@ -118,7 +118,7 @@ public final class ArtifactInstaller {
             } catch (IOException e) {
                 installDeleteFailure(failures, del,
                         InstallFailure.InstallFailureCategory.IO_ERROR,
-                        "I/O error: " + e.toString());
+                        installFailureMessage("I/O error while deleting mod", e));
             }
         }
 
@@ -202,10 +202,22 @@ public final class ArtifactInstaller {
 
             try {
                 // Ensure parent directory exists
-                Files.createDirectories(targetDir);
+                try {
+                    Files.createDirectories(targetDir);
+                } catch (IOException e) {
+                    installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
+                            installFailureMessage("I/O error while creating target directory", e));
+                    continue;
+                }
 
                 // Copy to pending
-                Files.copy(sourceFile, pendingFile, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Files.copy(sourceFile, pendingFile, StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
+                            installFailureMessage("I/O error while copying to pending file", e));
+                    continue;
+                }
                 pendingCreated = true;
 
                 // Pre-install validation
@@ -238,7 +250,7 @@ public final class ArtifactInstaller {
                             pendingCreated = false; // taken over by transaction
                         } catch (IOException e) {
                             installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
-                                    "Jar transaction failed");
+                                    installFailureMessage("Error while performing jar transaction", e));
                             continue;
                         }
 
@@ -286,7 +298,7 @@ public final class ArtifactInstaller {
                         } catch (IOException e) {
                             installFailure(failures, task,
                                     InstallFailure.InstallFailureCategory.IO_ERROR,
-                                    "Failed to backup old file");
+                                    installFailureMessage("I/O error while backing up old file", e));
                             continue;
                         }
 
@@ -298,8 +310,8 @@ public final class ArtifactInstaller {
                             // rollback: restore old jar from backup
                             boolean rollbackOk = rollbackDifferentTargetInstall(
                                     task.targetPath, backupPath, oldJar);
-                            String msg = "Failed to install target; ";
-                            msg += rollbackOk ? "rolled back" : "rollback failed";
+                            String msg = installFailureMessage("I/O error while moving installed file", e);
+                            msg += rollbackOk ? " (rolled back)" : " (rollback failed)";
                             installFailure(failures, task,
                                     InstallFailure.InstallFailureCategory.IO_ERROR,
                                     msg);
@@ -323,8 +335,8 @@ public final class ArtifactInstaller {
                         } catch (IOException e) {
                             boolean rollbackOk = rollbackDifferentTargetInstall(
                                     task.targetPath, backupPath, oldJar);
-                            String msg = "Failed to verify installed file; ";
-                            msg += rollbackOk ? "rolled back" : "rollback failed";
+                            String msg = installFailureMessage("Failed to verify installed file", e);
+                            msg += rollbackOk ? " (rolled back)" : " (rollback failed)";
                             installFailure(failures, task,
                                     InstallFailure.InstallFailureCategory.IO_ERROR,
                                     msg);
@@ -352,8 +364,20 @@ public final class ArtifactInstaller {
                                 StandardCopyOption.ATOMIC_MOVE);
                         pendingCreated = false; // pending moved away
                     } catch (AtomicMoveNotSupportedException amne) {
-                        Files.move(pendingFile, task.targetPath);
-                        pendingCreated = false; // pending moved away
+                        try {
+                            Files.move(pendingFile, task.targetPath);
+                            pendingCreated = false; // pending moved away
+                        } catch (IOException fallbackMoveError) {
+                            installFailure(failures, task,
+                                    InstallFailure.InstallFailureCategory.IO_ERROR,
+                                    installFailureMessage("I/O error while moving installed file", fallbackMoveError));
+                            continue;
+                        }
+                    } catch (IOException moveError) {
+                        installFailure(failures, task,
+                                InstallFailure.InstallFailureCategory.IO_ERROR,
+                                installFailureMessage("I/O error while moving installed file", moveError));
+                        continue;
                     }
 
                     // Final file verification
@@ -367,8 +391,9 @@ public final class ArtifactInstaller {
                             continue;
                         }
                     } catch (IOException e) {
-                        installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
-                                "Failed to verify installed file");
+                        installFailure(failures, task,
+                                InstallFailure.InstallFailureCategory.IO_ERROR,
+                                installFailureMessage("Failed to verify installed file", e));
                         continue;
                     }
 
@@ -392,7 +417,7 @@ public final class ArtifactInstaller {
                     break;
                 }
                 installFailure(failures, task, InstallFailure.InstallFailureCategory.IO_ERROR,
-                        "Install I/O error");
+                        installFailureMessage("Unexpected I/O error during install", e));
             } finally {
                 // Clean up pending unless successfully moved or taken over by transaction
                 if (pendingCreated && pendingFile != null) {
@@ -591,6 +616,15 @@ public final class ArtifactInstaller {
         } catch (IOException e) {
             return false;
         }
+    }
+
+    private static String installFailureMessage(String phase, Throwable t) {
+        String clazz = t.getClass().getSimpleName();
+        String msg = t.getMessage();
+        if (msg == null || msg.isBlank()) {
+            msg = t.toString();
+        }
+        return phase + ": " + clazz + ": " + msg;
     }
 
 }

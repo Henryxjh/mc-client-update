@@ -608,6 +608,46 @@ class ArtifactDownloaderTest {
     }
 
     @Test
+    void ioFailureMessageContainsExceptionDetail() throws Exception {
+        responseBody = new byte[128];
+        String sha512 = sha512Hex(responseBody);
+        Path stagingBase = gameDir.resolve(".mc-client-update/downloads");
+        Path destDir = stagingBase.resolve("sha512-" + sha512);
+        Files.createDirectories(destDir);
+        // Create a directory with the same name as the target file to cause Files.move to fail
+        Path conflictDir = destDir.resolve("mod.jar");
+        Files.createDirectory(conflictDir);
+        // Make it non-empty to ensure move fails with DirectoryNotEmptyException
+        Files.write(conflictDir.resolve("dummy"), "content".getBytes());
+
+        installSingleContextHandler("/mod.jar", 200, responseBody, "application/java-archive");
+
+        Variant variant = new Variant(new Selector(Optional.empty(), Optional.empty(), Optional.empty()), 0,
+                new Artifact("1.0", "mod.jar", responseBody.length,
+                        new Hashes(Optional.of(sha256Hex(responseBody)), Optional.of(sha512)),
+                        new HostedDownload("mod.jar")));
+        Mod mod = buildMod("mod", true, List.of(variant));
+        Manifest manifest = buildManifest(Optional.of(manifestUri), Map.of("mod", mod));
+        ScanResult scan = scanResultFor(List.of(
+                new UpdateCandidate("mod", mod, variant, Optional.empty(),
+                        UpdateCandidate.Reason.MISSING_REQUIRED)));
+
+        DownloadBatchResult result = ArtifactDownloader.downloadBatch(
+                manifest, manifestUri, scan, gameDir, timeout, timeout);
+
+        assertEquals(0, result.downloaded().size(), "no successful download expected");
+        assertEquals(1, result.failed().size());
+        DownloadFailure failure = result.failed().get(0);
+        assertEquals(ArtifactDownloader.FailureCategory.IO_ERROR.name(), failure.category());
+        String msg = failure.message();
+        assertTrue(msg.contains("while moving temporary file"), "Must contain phase, got: " + msg);
+        assertTrue(msg.contains("FileAlreadyExistsException")
+                        || msg.contains("DirectoryNotEmptyException")
+                        || msg.contains("FileSystemException"),
+                "Must contain exception class name, got: " + msg);
+    }
+
+    @Test
     void cacheValidReusesArtifactWithoutNetworkRequest() throws Exception {
         responseBody = new byte[512];
         String sha256 = sha256Hex(responseBody);

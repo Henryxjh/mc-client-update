@@ -714,4 +714,56 @@ class ArtifactInstallerTest {
         assertTrue(Files.isRegularFile(expectedPath));
         assertEquals(content, Files.readString(expectedPath, UTF_8));
     }
+
+    @Test
+    void installIoErrorContainsStageAndException() throws IOException {
+        Path gameDir = gameDir();
+        Path modsDir = gameDir.resolve("mods");
+        Files.createDirectories(modsDir);
+
+        Path stageDir = stagingDir(gameDir);
+        Path staged = stageDir.resolve("mod.jar");
+        String content = "mod";
+        Files.writeString(staged, content, UTF_8);
+
+        Hashing.Hashes h = Hashing.hashes(staged);
+        Hashes mh = new Hashes(Optional.of(h.sha256()), Optional.of(h.sha512()));
+
+        Artifact artifact = new Artifact("1.0", "mod.jar", content.length(),
+                mh, new HostedDownload("http://example.com/mod.jar"));
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant variant = new Variant(sel, 1, artifact);
+        Mod mod = new Mod("mod-io", true, Optional.empty(), Optional.empty(), List.of(variant));
+        Manifest manifest = makeManifest(Map.of("mod-io", mod));
+
+        DownloadedArtifact da = new DownloadedArtifact(
+                List.of("mod-io"), "mod.jar", "1.0", "hosted", staged,
+                ".mc-client-update/downloads/" + staged.getFileName());
+
+        ScanResult scan = new ScanResult(
+                List.of(new UpdateCandidate("mod-io", mod, variant, Optional.empty(),
+                        UpdateCandidate.Reason.MISSING_REQUIRED)),
+                1, 0);
+        DownloadBatchResult dl = new DownloadBatchResult(
+                manifest.manifestId(), 1L, List.of(da), List.of(), List.of());
+
+        // Create the pending path as a non-empty directory to provoke copy failure
+        String canonical = canonicalFor(artifact, "mod-io", h);
+        Path pendingPath = modsDir.resolve("." + canonical + ".mc-client-update-pending");
+        Files.createDirectories(pendingPath);
+        Files.writeString(pendingPath.resolve("block"), "block", UTF_8);
+
+        InstallBatchResult res = ArtifactInstaller.installBatch(manifest, scan, dl, gameDir);
+        assertEquals(0, res.installed().size());
+        assertEquals(1, res.failures().size());
+        InstallFailure failure = res.failures().get(0);
+        assertEquals(InstallFailure.InstallFailureCategory.IO_ERROR, failure.category());
+        String msg = failure.message();
+        assertTrue(msg.contains("I/O error while copying to pending file"),
+                "Message must contain stage description, got: " + msg);
+        assertTrue(msg.contains("FileAlreadyExistsException")
+                        || msg.contains("DirectoryNotEmptyException")
+                        || msg.contains("FileSystemException"),
+                "Message must contain exception class name, got: " + msg);
+    }
 }

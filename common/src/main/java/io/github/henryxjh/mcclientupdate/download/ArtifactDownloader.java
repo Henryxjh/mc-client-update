@@ -192,7 +192,7 @@ public final class ArtifactDownloader {
                         failures.add(new DownloadFailure(
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.IO_ERROR.name(),
-                                "Cannot delete cached file"));
+                                failureMessage("I/O error while deleting cached file", e)));
                         continue;
                     }
                 }
@@ -204,7 +204,7 @@ public final class ArtifactDownloader {
                 failures.add(new DownloadFailure(
                         modIds, fileName, version, sourceType,
                         FailureCategory.IO_ERROR.name(),
-                        "I/O error"));
+                        failureMessage("I/O error while creating destination directory", e)));
                 continue;
             }
 
@@ -219,7 +219,7 @@ public final class ArtifactDownloader {
                     failures.add(new DownloadFailure(
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
-                            "Invalid download URL"));
+                            failureMessage("Invalid download URL while resolving", e)));
                     continue;
                 }
 
@@ -269,7 +269,7 @@ public final class ArtifactDownloader {
                     failures.add(new DownloadFailure(
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
-                            "Invalid download URL"));
+                            failureMessage("Invalid download URL while constructing request", e)));
                     continue;
                 }
 
@@ -290,7 +290,7 @@ public final class ArtifactDownloader {
                     failures.add(new DownloadFailure(
                             modIds, fileName, version, sourceType,
                             FailureCategory.IO_ERROR.name(),
-                            "I/O error"));
+                            failureMessage("I/O error while sending request", e)));
                     continue;
                 }
 
@@ -405,14 +405,14 @@ public final class ArtifactDownloader {
                             failures.add(new DownloadFailure(
                                     modIds, fileName, version, sourceType,
                                     FailureCategory.IO_ERROR.name(),
-                                    "I/O error"));
+                                    failureMessage("I/O error while moving temporary file", moveFallbackError)));
                             continue;
                         }
                     } catch (IOException e) {
                         failures.add(new DownloadFailure(
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.IO_ERROR.name(),
-                                "I/O error"));
+                                failureMessage("I/O error while moving temporary file", e)));
                         continue;
                     }
 
@@ -438,7 +438,7 @@ public final class ArtifactDownloader {
                         failures.add(new DownloadFailure(
                                 modIds, fileName, version, sourceType,
                                 FailureCategory.IO_ERROR.name(),
-                                "I/O error"));
+                                failureMessage("I/O error while reading response body", e)));
                     }
                 }
             } finally {
@@ -515,5 +515,14 @@ public final class ArtifactDownloader {
             return false;
         }
         return true;
+    }
+
+    private static String failureMessage(String phase, Throwable t) {
+        String clazz = t.getClass().getSimpleName();
+        String msg = t.getMessage();
+        if (msg == null || msg.isBlank()) {
+            msg = t.toString();
+        }
+        return phase + ": " + clazz + ": " + msg;
     }
 }
