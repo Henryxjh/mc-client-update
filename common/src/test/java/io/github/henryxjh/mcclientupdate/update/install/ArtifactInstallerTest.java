@@ -55,12 +55,16 @@ class ArtifactInstallerTest {
     }
 
     private static String canonicalFor(Artifact artifact, String modId, Hashing.Hashes hashes) {
-        String hash;
+        String full;
         if (hashes.sha512() != null && !hashes.sha512().isEmpty()) {
-            hash = hashes.sha512();
+            full = hashes.sha512();
         } else {
-            hash = hashes.sha256();
+            full = hashes.sha256();
         }
+        if (full == null || full.length() < 32) {
+            throw new IllegalArgumentException("hash too short for canonical name: " + full);
+        }
+        String hash = full.substring(0, 32);
         return modId + "-" + artifact.version() + "-" + hash + ".jar";
     }
 
@@ -524,8 +528,9 @@ class ArtifactInstallerTest {
         InstalledArtifact installed = res.installed().get(0);
         assertEquals("ADD", installed.action());
 
-        String hash = stagedHashes.sha512() != null && !stagedHashes.sha512().isEmpty()
+        String fullHash = stagedHashes.sha512() != null && !stagedHashes.sha512().isEmpty()
                 ? stagedHashes.sha512() : stagedHashes.sha256();
+        String hash = fullHash.substring(0, 32);
         // sanitised version replaces /, ! and spaces with underscores
         assertTrue(installed.fileName().startsWith("abc-1_2_3__-"));
         assertTrue(installed.fileName().endsWith("-" + hash + ".jar"));
@@ -577,7 +582,8 @@ class ArtifactInstallerTest {
         InstalledArtifact installed = res.installed().get(0);
         assertEquals("ADD", installed.action());
 
-        String expectedFileName = "mod-a" + "-" + artifact.version() + "-" + stagedHashes.sha256() + ".jar";
+        String expectedHash = stagedHashes.sha256().substring(0, 32);
+        String expectedFileName = "mod-a" + "-" + artifact.version() + "-" + expectedHash + ".jar";
         assertEquals(expectedFileName, installed.fileName());
         Path expectedPath = modsDir.resolve(expectedFileName);
         assertTrue(Files.isRegularFile(expectedPath));
@@ -660,5 +666,52 @@ class ArtifactInstallerTest {
         assertFalse(first.fileName().equals(second.fileName()));
         assertTrue(first.fileName().contains("-1.0-"));
         assertTrue(second.fileName().contains("-1.0-"));
+    }
+
+    @Test
+    void sha512HashTruncatedTo32() throws IOException {
+        Path gameDir = gameDir();
+        Path modsDir = gameDir.resolve("mods");
+        Files.createDirectories(modsDir);
+
+        Path stageDir = stagingDir(gameDir);
+        Path staged = stageDir.resolve("mod.jar");
+        String content = "test";
+        Files.writeString(staged, content, UTF_8);
+
+        Hashing.Hashes stagedHashes = Hashing.hashes(staged);
+        // only sha512
+        Hashes manifestHashes = new Hashes(Optional.empty(), Optional.of(stagedHashes.sha512()));
+
+        Artifact artifact = new Artifact("1.0", "mod.jar", content.length(),
+                manifestHashes, new HostedDownload("http://example.com/mod.jar"));
+        Selector sel = new Selector(Optional.empty(), Optional.empty(), Optional.empty());
+        Variant variant = new Variant(sel, 1, artifact);
+        Mod mod = new Mod("mod-t", true, Optional.empty(), Optional.empty(), List.of(variant));
+        Manifest manifest = makeManifest(Map.of("mod-t", mod));
+
+        DownloadedArtifact da = new DownloadedArtifact(
+                List.of("mod-t"), "mod.jar", "1.0", "hosted", staged,
+                ".mc-client-update/downloads/" + staged.getFileName());
+
+        ScanResult scan = new ScanResult(
+                List.of(new UpdateCandidate("mod-t", mod, variant, Optional.empty(),
+                        UpdateCandidate.Reason.MISSING_REQUIRED)),
+                1, 0);
+        DownloadBatchResult dl = new DownloadBatchResult(
+                manifest.manifestId(), 1L, List.of(da), List.of(), List.of());
+
+        InstallBatchResult res = ArtifactInstaller.installBatch(manifest, scan, dl, gameDir);
+        assertEquals(1, res.installed().size());
+        InstalledArtifact installed = res.installed().get(0);
+        assertEquals("ADD", installed.action());
+
+        // hash part should be first 32 chars of sha512
+        String expectedHash = stagedHashes.sha512().substring(0, 32);
+        String expectedFileName = "mod-t" + "-1.0-" + expectedHash + ".jar";
+        assertEquals(expectedFileName, installed.fileName());
+        Path expectedPath = modsDir.resolve(expectedFileName);
+        assertTrue(Files.isRegularFile(expectedPath));
+        assertEquals(content, Files.readString(expectedPath, UTF_8));
     }
 }

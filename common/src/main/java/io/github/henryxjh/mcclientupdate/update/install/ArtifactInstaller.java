@@ -517,7 +517,7 @@ public final class ArtifactInstaller {
         Collections.sort(sortedIds);
         String modid = sortedIds.isEmpty() ? "unknown" : sortedIds.get(0);
         String version = safeVersion(artifact.version());
-        String hash = getInstallHash(artifact);
+        String hash = shortHash(getInstallHash(artifact));
         return modid + "-" + version + "-" + hash + ".jar";
     }
 
@@ -555,6 +555,13 @@ public final class ArtifactInstaller {
         }
         return artifact.hashes().sha256().orElseThrow(() ->
                 new IllegalArgumentException("artifact has no sha256 or sha512 hash"));
+    }
+
+    private static String shortHash(String fullHash) {
+        if (fullHash == null || fullHash.length() < 32) {
+            throw new IllegalArgumentException("hash too short for canonical name: " + fullHash);
+        }
+        return fullHash.substring(0, 32);
     }
 
     private static void markRemainingDeletedInterrupted(
