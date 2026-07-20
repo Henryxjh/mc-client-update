@@ -11,4 +11,4 @@ plugins {
 }
 
 rootProject.name = 'mc-client-update'
-include 'common', 'fabric', 'neoforge'
+include 'common', 'fabric', 'neoforge', 'server-fabric', 'server-neoforge'

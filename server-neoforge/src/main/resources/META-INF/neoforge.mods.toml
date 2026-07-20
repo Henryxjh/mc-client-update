@@ -1,0 +1,19 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+
+[[mods]]
+modId = "mcu-manifest-gen"
+version = "${version}"
+displayName = "MCU Manifest Generator"
+description = "Generate mcumanifest workspace from installed server mods."
+license = "MIT"
+
+[[dependencies.mcu-manifest-gen]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+
+[[dependencies.mcu-manifest-gen]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
