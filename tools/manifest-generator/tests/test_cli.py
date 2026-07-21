@@ -404,3 +404,71 @@ def test_add_delete_variant_level_writes_workspace(tmp_path, runner):
     assert var["priority"] == 0
     assert var["action"] == "delete"
     assert "artifact" not in var
+
+
+# ---------------------------------------------------------------------------
+# Tests for list -f and list -q
+# ---------------------------------------------------------------------------
+
+def test_list_quiet_modids(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    # Add a few mods
+    for mid in ("sodium", "lithium", "iris"):
+        data = json.loads(ws_file.read_text())
+        data.setdefault("mods", {})[mid] = {"name": mid, "required": True, "variants": []}
+        ws_file.write_text(json.dumps(data))
+
+    result = runner("--workspace", str(ws_file), "list", "-q")
+    assert result.returncode == 0
+    lines = result.stdout.strip().splitlines()
+    assert lines == ["iris", "lithium", "sodium"]
+
+
+def test_list_quiet_files(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    data = json.loads(ws_file.read_text())
+    data.setdefault("mods", {})["moda"] = {
+        "name": "ModA", "required": True,
+        "variants": [
+            {"localFile": "/a/b.jar", "version": "1"},
+            {"fileName": "c.jar", "version": "2"},
+            {"version": "3"},
+        ]
+    }
+    data["mods"]["modb"] = {"name": "ModB", "required": True, "variants": []}
+    ws_file.write_text(json.dumps(data))
+
+    result = runner("--workspace", str(ws_file), "list", "-q", "-f")
+    assert result.returncode == 0
+    lines = result.stdout.strip().splitlines()
+    # modb has no variants → no file output
+    # moda: localFile → /a/b.jar; fileName → c.jar; none → -
+    assert lines == ["/a/b.jar", "c.jar", "-"]
+
+
+def test_list_file_flag_has_column(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    data = json.loads(ws_file.read_text())
+    data.setdefault("mods", {})["testmod"] = {
+        "name": "TestMod", "required": True,
+        "variants": [{"localFile": "/x/y.jar", "version": "1.0"}]
+    }
+    ws_file.write_text(json.dumps(data))
+
+    result = runner("--workspace", str(ws_file), "list", "-f")
+    assert result.returncode == 0
+    assert "file" in result.stdout.lower() or "/x/y.jar" in result.stdout
+    assert "/x/y.jar" in result.stdout
+
+
+def test_fish_completion_contains_list_flags(runner):
+    result = runner("completion", "fish")
+    assert result.returncode == 0
+    assert "-s f -l file -d \"Show local file paths\"" in result.stdout
+    assert "-s q -l quiet" in result.stdout

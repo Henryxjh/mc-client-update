@@ -8,7 +8,8 @@
 
 - `pyproject.toml` 和 `mcumanifest` 命令行入口。
 - `manifest-workspace.json` 读写。
-- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`remove`、`list`、`set-license`、`set-version-policy`、`build`、`validate`、`completion` 子命令。
+- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`add-delete`、`remove`、`list`、`set-license`、`set-version-policy`、`build`、`validate`、`completion` 子命令。
+- `list` 支持 `-f`/`--file` 显示每个 variant 的本地文件路径，`-q`/`--quiet` 仅输出 modid 或文件列表。
 - selector 枚举：loader、OS、CPU 架构（含 `loongarch64`）。
 - 重复 modid + selector 的冲突处理：非交互失败，`--force` 覆盖，`--no-overwrite` 失败。
 - `sha256` / `sha512` 与 size 计算。
@@ -47,15 +48,16 @@ tools/manifest-generator/
 │       ├── __init__.py
 │       ├── cli.py
 │       ├── workspace.py
-│       ├── collector.py
-│       ├── jar_metadata.py
 │       ├── builder.py
 │       ├── validator.py
 │       ├── licenses.py
-│       └── completers.py
+│       ├── hashing.py
+│       └── constants.py
 └── tests/
     ├── test_workspace.py
     ├── test_builder.py
+    ├── test_validator.py
+    ├── test_cli.py
     ├── test_duplicates.py
     └── test_licenses.py
 ```
