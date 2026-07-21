@@ -81,6 +81,13 @@ def main():
     parser.add_argument("--output")
     args = parser.parse_args()
 
+    # Validate modId
+    import re
+    if not re.fullmatch(r'^[a-z][a-z0-9_]{1,63}$', args.modid):
+        sys.exit("Error: modId must be lowercase, start with a letter, "
+                 "and contain only a-z, 0-9, underscore. "
+                 "Hyphens ('-') are not allowed. Got: " + args.modid)
+
     resources = Path(args.resources).resolve()
     if not resources.is_dir():
         sys.exit(f"Resources directory not found: {resources}")
