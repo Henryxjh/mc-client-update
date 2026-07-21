@@ -580,6 +580,9 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -a "(__mcum
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -a "(__mcumanifest_modids)" -d "Mod ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -a "(__mcumanifest_modids)" -d "Mod ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-hosted" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-direct" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-manual" -a "(__mcumanifest_modids)" -d "Mod ID"
 """
 
 
