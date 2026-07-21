@@ -500,22 +500,47 @@ def cmd_validate(args):
 
 FISH_COMPLETION = """\
 complete -c mcumanifest -f
-complete -c mcumanifest -l workspace -r -F -d "Path to the workspace file"
-complete -c mcumanifest -n "__fish_use_subcommand" -a init -d "Create a new manifest workspace"
-complete -c mcumanifest -n "__fish_use_subcommand" -a scan -d "Import installed-mods.json into workspace"
-complete -c mcumanifest -n "__fish_use_subcommand" -a add-hosted -d "Add a hosted (self-served) download"
-complete -c mcumanifest -n "__fish_use_subcommand" -a add-direct -d "Add a direct-download artifact"
-complete -c mcumanifest -n "__fish_use_subcommand" -a add-manual -d "Add a manual update reference"
-complete -c mcumanifest -n "__fish_use_subcommand" -a add-delete -d "Add a mod-level delete action"
-complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
-complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
+function __mcumanifest_seen_subcommand
+    set -l subcommands init scan add-hosted add-direct add-manual add-delete remove list set-license set-version-policy build validate completion
+    set -l args (commandline -opc)
+    set -l skip_next 0
+    for token in $args[2..-1]
+        if test $skip_next -eq 1
+            set skip_next 0
+            continue
+        end
+        switch $token
+            case --workspace
+                set skip_next 1
+                continue
+            case '--workspace=*'
+                continue
+        end
+        if contains -- $token $subcommands
+            return 0
+        end
+    end
+    return 1
+end
+function __mcumanifest_before_subcommand
+    not __mcumanifest_seen_subcommand
+end
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -l workspace -r -F -d "Path to the workspace file"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a init -d "Create a new manifest workspace"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a scan -d "Import installed-mods.json into workspace"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a add-hosted -d "Add a hosted (self-served) download"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a add-direct -d "Add a direct-download artifact"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a add-manual -d "Add a manual update reference"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a add-delete -d "Add a mod-level delete action"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a remove -d "Remove a mod or variant"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a list -d "List mods in workspace"
 complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s f -l file -d "Show local file paths"
 complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s q -l quiet -d "Quiet: only modids (or files with -f)"
-complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
-complete -c mcumanifest -n "__fish_use_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
-complete -c mcumanifest -n "__fish_use_subcommand" -a build -d "Build the client-update-manifest.json"
-complete -c mcumanifest -n "__fish_use_subcommand" -a validate -d "Validate an existing manifest"
-complete -c mcumanifest -n "__fish_use_subcommand" -a completion -d "Generate shell completion script"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a set-license -d "Set license for a mod"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a build -d "Build the client-update-manifest.json"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a validate -d "Validate an existing manifest"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a completion -d "Generate shell completion script"
 # init
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l manifest-id -d "Manifest ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from init" -l mc -l minecraft-version -d "Minecraft version"
@@ -568,9 +593,14 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l schema -r -
 function __mcumanifest_modids
     set -l ws_args
     set -l args (commandline -opc)
-    for i in (seq (count $args))
-        if string match -q -- "--workspace" "$args[$i]"; and test $i -lt (count $args)
-            set ws_args --workspace "$args[(math $i + 1)]"
+    set -l n (count $args)
+    for i in (seq $n)
+        if string match -q -- "--workspace" "$args[$i]"; and test (math "$i + 1") -le $n
+            set -l ws_index (math "$i + 1")
+            set ws_args --workspace "$args[$ws_index]"
+            break
+        else if string match -q -- "--workspace=*" "$args[$i]"
+            set ws_args --workspace (string replace -- "--workspace=" "" "$args[$i]")
             break
         end
     end

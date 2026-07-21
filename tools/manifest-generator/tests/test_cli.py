@@ -515,3 +515,19 @@ def test_fish_completion_contains_modid_autocomplete(runner):
     assert result.returncode == 0
     assert "__mcumanifest_modids" in result.stdout
     assert '(__mcumanifest_modids)' in result.stdout
+    assert "set -l ws_index" in result.stdout
+    assert 'string replace -- "--workspace=" ""' in result.stdout
+
+
+def test_fish_completion_limits_workspace_to_before_subcommand(runner):
+    result = runner("completion", "fish")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "function __mcumanifest_seen_subcommand" in stdout
+    assert "function __mcumanifest_before_subcommand" in stdout
+    assert "case --workspace" in stdout
+    assert "case '--workspace=*'" in stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_before_subcommand" -l workspace -r -F' in stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a init' in stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a completion' in stdout
+    assert "__fish_use_subcommand" not in stdout
