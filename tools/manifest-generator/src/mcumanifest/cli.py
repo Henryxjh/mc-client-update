@@ -290,12 +290,10 @@ def cmd_set_version_policy(args):
         sys.exit(1)
     has_set = args.skip_if_installed_version_greater_than is not None
     has_clear = args.clear_skip_if_installed_version_greater_than
-    if has_set and has_clear:
-        print("Error: provide exactly one of --skip-if-installed-version-greater-than or --clear-skip-if-installed-version-greater-than",
-              file=sys.stderr)
-        sys.exit(1)
-    if not (has_set or has_clear):
-        print("Error: provide exactly one of --skip-if-installed-version-greater-than or --clear-skip-if-installed-version-greater-than",
+    has_now = args.skip_if_installed_version_greater_than_now
+    if sum((has_set, has_clear, has_now)) != 1:
+        print("Error: provide exactly one of --skip-if-installed-version-greater-than, "
+              "--skip-if-installed-version-greater-than-now, or --clear-skip-if-installed-version-greater-than",
               file=sys.stderr)
         sys.exit(1)
     if has_set:
@@ -305,6 +303,18 @@ def cmd_set_version_policy(args):
             sys.exit(1)
         mod_entry["skipIfInstalledVersionGreaterThan"] = ver
         print(f"skipIfInstalledVersionGreaterThan set to '{ver}' for mod '{args.modid}'")
+    elif has_now:
+        variants = mod_entry.get("variants", [])
+        if not variants:
+            print("Error: no variants found for mod '{args.modid}'", file=sys.stderr)
+            sys.exit(1)
+        ver = variants[0].get("version", "")
+        if not ver or ver.strip() == "":
+            print("Error: first variant has no version set for mod '{args.modid}'", file=sys.stderr)
+            sys.exit(1)
+        ver = ver.strip()
+        mod_entry["skipIfInstalledVersionGreaterThan"] = ver
+        print(f"skipIfInstalledVersionGreaterThan set to '{ver}' for mod '{args.modid}' (from current version)")
     else:  # clear
         if "skipIfInstalledVersionGreaterThan" in mod_entry:
             del mod_entry["skipIfInstalledVersionGreaterThan"]
@@ -544,6 +554,7 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l license 
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l allow-redistribution -d "Mark as redistribution allowed"
 # set-version-policy
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l skip-if-installed-version-greater-than -r -d "Version threshold for skipping install"
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l skip-if-installed-version-greater-than-now -d "Set threshold to current variant version"
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l clear-skip-if-installed-version-greater-than -d "Remove skip version threshold"
 # build / validate
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l output -r -d "Output path"
@@ -681,6 +692,11 @@ def main():
         "--clear-skip-if-installed-version-greater-than",
         action="store_true",
         help="Remove the version threshold (disable skip)",
+    )
+    p_set_ver.add_argument(
+        "--skip-if-installed-version-greater-than-now",
+        action="store_true",
+        help="Set threshold to the current version (first variant)",
     )
 
     # build

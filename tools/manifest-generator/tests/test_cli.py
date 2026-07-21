@@ -467,6 +467,42 @@ def test_list_file_flag_has_column(tmp_path, runner):
     assert "/x/y.jar" in result.stdout
 
 
+def test_set_version_policy_now(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    data = json.loads(ws_file.read_text())
+    data.setdefault("mods", {})["testmod"] = {
+        "name": "Test Mod", "required": True,
+        "variants": [
+            {"version": "2.5.0", "download": {"type": "hosted", "url": "x"}},
+        ]
+    }
+    ws_file.write_text(json.dumps(data))
+
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "testmod", "--skip-if-installed-version-greater-than-now")
+    assert res.returncode == 0
+    ws2 = json.loads(ws_file.read_text())
+    assert ws2["mods"]["testmod"]["skipIfInstalledVersionGreaterThan"] == "2.5.0"
+
+
+def test_set_version_policy_now_no_variants(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    data = json.loads(ws_file.read_text())
+    data.setdefault("mods", {})["testmod"] = {
+        "name": "Test Mod", "required": True, "variants": []
+    }
+    ws_file.write_text(json.dumps(data))
+
+    res = runner("--workspace", str(ws_file), "set-version-policy",
+                 "testmod", "--skip-if-installed-version-greater-than-now")
+    assert res.returncode != 0
+    assert "no variants" in res.stderr.lower()
+
+
 def test_fish_completion_contains_list_flags(runner):
     result = runner("completion", "fish")
     assert result.returncode == 0
