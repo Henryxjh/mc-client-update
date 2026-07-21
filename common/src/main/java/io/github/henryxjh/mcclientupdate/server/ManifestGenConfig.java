@@ -39,7 +39,7 @@ public final class ManifestGenConfig {
         Path configPath = gameDirectory.resolve("config").resolve(FILE_NAME);
         if (!Files.exists(configPath)) {
             ManifestGenConfig defaults = new ManifestGenConfig(
-                    new ArrayList<>(List.of("mcu-manifest-gen")),
+                    new ArrayList<>(List.of("mcu_manifest_gen")),
                     new ArrayList<>(),
                     "manifest-workspace.json");
             defaults.save(gameDirectory);
@@ -53,7 +53,7 @@ public final class ManifestGenConfig {
                 throw new IllegalStateException("Config is empty: " + configPath);
             }
             return new ManifestGenConfig(
-                    json.ignoredMods != null ? json.ignoredMods : List.of("mcu-manifest-gen"),
+                    json.ignoredMods != null ? json.ignoredMods : List.of("mcu_manifest_gen"),
                     json.allowedUsers != null ? json.allowedUsers : List.of(),
                     json.outputPath != null && !json.outputPath.isBlank()
                             ? json.outputPath : "manifest-workspace.json");

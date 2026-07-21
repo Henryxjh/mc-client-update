@@ -20,7 +20,7 @@ class ManifestGenConfigTest {
     void loadCreatesDefaultConfigWhenMissing() throws Exception {
         ManifestGenConfig config = ManifestGenConfig.load(gameDir);
 
-        assertEquals(List.of("mcu-manifest-gen"), config.getIgnoredMods());
+        assertEquals(List.of("mcu_manifest_gen"), config.getIgnoredMods());
         assertTrue(config.getAllowedUsers().isEmpty());
         assertEquals(gameDir.resolve("manifest-workspace.json"), config.getOutputPath(gameDir));
     }

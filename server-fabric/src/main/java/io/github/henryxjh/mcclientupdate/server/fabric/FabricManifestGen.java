@@ -30,7 +30,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class FabricManifestGen implements ModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final String MOD_ID = "mcu-manifest-gen";
+    private static final String MOD_ID = "mcu_manifest_gen";
 
     @Override
     public void onInitialize() {

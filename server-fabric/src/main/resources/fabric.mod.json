@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "mcu-manifest-gen",
+  "id": "mcu_manifest_gen",
   "version": "${version}",
   "name": "MCU Manifest Generator",
   "description": "Generate mcumanifest workspace from installed server mods.",

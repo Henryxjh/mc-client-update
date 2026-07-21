@@ -29,7 +29,7 @@ import java.util.Set;
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
-@Mod("mcu-manifest-gen")
+@Mod("mcu_manifest_gen")
 public final class NeoForgeManifestGen {
     private static final Logger LOGGER = LogUtils.getLogger();
 

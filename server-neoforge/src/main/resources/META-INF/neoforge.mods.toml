@@ -3,17 +3,17 @@ loaderVersion = "[4,)"
 license = "GPL-3.0"
 
 [[mods]]
-modId = "mcu-manifest-gen"
+modId = "mcu_manifest_gen"
 version = "${version}"
 displayName = "MCU Manifest Generator"
 description = "Generate mcumanifest workspace from installed server mods."
 
-[[dependencies.mcu-manifest-gen]]
+[[dependencies.mcu_manifest_gen]]
 modId = "neoforge"
 type = "required"
 versionRange = "[21.1,)"
 
-[[dependencies.mcu-manifest-gen]]
+[[dependencies.mcu_manifest_gen]]
 modId = "minecraft"
 type = "required"
 versionRange = "[1.21.1,1.21.2)"

@@ -1,4 +1,4 @@
-# mcu-manifest-gen — 设计文档
+# mcu_manifest_gen — 设计文档
 
 服务端 Minecraft mod，通过命令将已加载 mod 列表导出为 `mcumanifest` 工具兼容的 workspace JSON。
 
@@ -6,7 +6,7 @@
 
 | 属性 | 值 |
 |------|-----|
-| modId | `mcu-manifest-gen` |
+| modId | `mcu_manifest_gen` |
 | 命令根 | `/mcum-gen` |
 | 配置文件 | `config/mcu-manifest-gen.json` |
 | 输出文件 | 由配置中 `outputPath` 指定，默认 `manifest-workspace.json` |
@@ -19,7 +19,7 @@
 
 ```json
 {
-  "ignoredMods": ["mcu-manifest-gen"],
+  "ignoredMods": ["mcu_manifest_gen"],
   "allowedUsers": [],
   "outputPath": "manifest-workspace.json"
 }
@@ -27,7 +27,7 @@
 
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
-| `ignoredMods` | `["mcu-manifest-gen"]` | 不写入 workspace 的 modId |
+| `ignoredMods` | `["mcu_manifest_gen"]` | 不写入 workspace 的 modId |
 | `allowedUsers` | `[]` | 空 = 仅控制台可执行；填入用户名后对应玩家可在聊天框执行 |
 | `outputPath` | `"manifest-workspace.json"` | 输出路径，相对服务端根目录。一个路径对应一个 workspace，反复读写同一个文件 |
 
@@ -109,7 +109,7 @@ Selector 匹配条件（全部满足才算匹配）：
 [MCUManifestGen] Scanning 25 loaded mods...
 [MCUManifestGen] Manifest ID: my-pack-1.21.1
 [MCUManifestGen] Skipped 9 non-mod-folder (minecraft, fabricloader, neoforge, ...)
-[MCUManifestGen] Skipped 2 ignored (mcu-manifest-gen, lithium)
+[MCUManifestGen] Skipped 2 ignored (mcu_manifest_gen, lithium)
 [MCUManifestGen] Skipped 1 duplicate JAR (fabric-api-base)
 [MCUManifestGen] License from JAR metadata: sodium=LGPL-3.0, iris=LGPL-3.0
 [MCUManifestGen] Wrote 11 mods (5 updated, 4 added, 2 marked DELETE) to manifest-workspace.json
