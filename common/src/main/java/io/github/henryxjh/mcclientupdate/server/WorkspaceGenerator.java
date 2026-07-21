@@ -143,7 +143,7 @@ public final class WorkspaceGenerator {
                 skippedNonModFolder++;
                 continue;
             }
-            if (!realPath.startsWith(realModsDir)) {
+            if (realPath == null || !realPath.startsWith(realModsDir)) {
                 skippedNonModFolder++;
                 continue;
             }
@@ -240,7 +240,7 @@ public final class WorkspaceGenerator {
                     // Ensure download section exists
                     if (!variant.has("download")) {
                         JsonObject dl = new JsonObject();
-                        dl.addProperty("type", "hosted");
+                        dl.addProperty("type", "direct");
                         dl.addProperty("url", "TODO");
                         variant.add("download", dl);
                     }
@@ -266,7 +266,7 @@ public final class WorkspaceGenerator {
                 hashesObj.addProperty("sha512", hashes.sha512());
                 newVariant.add("hashes", hashesObj);
                 JsonObject dl = new JsonObject();
-                dl.addProperty("type", "hosted");
+                dl.addProperty("type", "direct");
                 dl.addProperty("url", "TODO");
                 newVariant.add("download", dl);
                 variants.add(newVariant);

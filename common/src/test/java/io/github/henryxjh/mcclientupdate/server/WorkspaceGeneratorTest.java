@@ -131,7 +131,7 @@ class WorkspaceGeneratorTest {
         assertNotNull(hashes.get("sha256").getAsString());
         assertNotNull(hashes.get("sha512").getAsString());
         JsonObject dl = variant.getAsJsonObject("download");
-        assertEquals("hosted", dl.get("type").getAsString());
+        assertEquals("direct", dl.get("type").getAsString());
         assertEquals("TODO", dl.get("url").getAsString());
     }
 
