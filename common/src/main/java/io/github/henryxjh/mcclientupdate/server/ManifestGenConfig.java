@@ -116,7 +116,6 @@ public final class ManifestGenConfig {
 
     // ---- JSON DTO -----------------------------------------------------
 
-    @SuppressWarnings("unused")
     private static class ConfigJson {
         List<String> ignoredMods;
         List<String> allowedUsers;

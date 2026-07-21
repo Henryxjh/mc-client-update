@@ -5,5 +5,6 @@ plugins {
 tasks.register('buildAll') {
     group = 'build'
     description = 'Builds the Fabric and NeoForge distributions.'
-    dependsOn ':common:test', ':fabric:build', ':neoforge:build'
+    dependsOn ':common:test', ':fabric:build', ':neoforge:build',
+            ':server-fabric:build', ':server-neoforge:build'
 }
