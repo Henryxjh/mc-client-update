@@ -500,6 +500,7 @@ def cmd_validate(args):
 
 FISH_COMPLETION = """\
 complete -c mcumanifest -f
+complete -c mcumanifest -l workspace -r -F -d "Path to the workspace file"
 complete -c mcumanifest -n "__fish_use_subcommand" -a init -d "Create a new manifest workspace"
 complete -c mcumanifest -n "__fish_use_subcommand" -a scan -d "Import installed-mods.json into workspace"
 complete -c mcumanifest -n "__fish_use_subcommand" -a add-hosted -d "Add a hosted (self-served) download"
@@ -563,6 +564,22 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l base-url -r -d
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l no-progress -d "Suppress detailed progress output"
 complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l manifest -r -F -d "Path to manifest JSON for validation"
 complete -c mcumanifest -n "__fish_seen_subcommand_from validate" -l schema -r -F -d "Path to JSON Schema file"
+# ---------- modid auto-complete (reads current workspace) ----------
+function __mcumanifest_modids
+    set -l ws_args
+    set -l args (commandline -opc)
+    for i in (seq (count $args))
+        if string match -q -- "--workspace" "$args[$i]"; and test $i -lt (count $args)
+            set ws_args --workspace "$args[(math $i + 1)]"
+            break
+        end
+    end
+    mcumanifest $ws_args list -q 2>/dev/null
+end
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove" -a "(__mcumanifest_modids)" -d "Mod ID"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-delete" -a "(__mcumanifest_modids)" -d "Mod ID"
 """
 
 

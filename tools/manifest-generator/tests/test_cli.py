@@ -508,3 +508,10 @@ def test_fish_completion_contains_list_flags(runner):
     assert result.returncode == 0
     assert "-s f -l file -d \"Show local file paths\"" in result.stdout
     assert "-s q -l quiet" in result.stdout
+
+
+def test_fish_completion_contains_modid_autocomplete(runner):
+    result = runner("completion", "fish")
+    assert result.returncode == 0
+    assert "__mcumanifest_modids" in result.stdout
+    assert '(__mcumanifest_modids)' in result.stdout
