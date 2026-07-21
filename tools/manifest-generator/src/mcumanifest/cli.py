@@ -234,6 +234,16 @@ def cmd_list(args):
     if not mods:
         print("No mods in workspace.")
         return
+    if args.quiet:
+        if args.file:
+            for mid in sorted(mods):
+                for v in mods[mid].get("variants", []):
+                    lf = v.get("localFile") or v.get("fileName") or "-"
+                    print(lf)
+        else:
+            for mid in sorted(mods):
+                print(mid)
+        return
     if args.file:
         print(f"{'modid':<30} {'name':<30} {'v':<3} {'file'}")
         print("-" * 90)
@@ -489,6 +499,7 @@ complete -c mcumanifest -n "__fish_use_subcommand" -a add-delete -d "Add a mod-l
 complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
 complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
 complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s f -l file -d "Show local file paths"
+complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s q -l quiet -d "Quiet: only modids (or files with -f)"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
 complete -c mcumanifest -n "__fish_use_subcommand" -a build -d "Build the client-update-manifest.json"
@@ -649,6 +660,7 @@ def main():
     # list
     p_list = sub.add_parser("list", help="List mods in workspace")
     p_list.add_argument("-f", "--file", action="store_true", help="Show local file paths")
+    p_list.add_argument("-q", "--quiet", action="store_true", help="Quiet: only modids (or files with -f)")
 
     # set-license
     p_set_lic = sub.add_parser("set-license", help="Set license for a mod")
