@@ -5,7 +5,7 @@
   "name": "MC Client Update",
   "description": "Updates server-managed client mods before Minecraft finishes starting.",
   "authors": ["Henry"],
-  "license": "MIT",
+  "license": "GPL-3.0",
   "environment": "client",
   "entrypoints": {
     "main": [

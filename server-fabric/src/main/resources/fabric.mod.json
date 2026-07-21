@@ -5,7 +5,7 @@
   "name": "MCU Manifest Generator",
   "description": "Generate mcumanifest workspace from installed server mods.",
   "authors": ["henryxjh"],
-  "license": "MIT",
+  "license": "GPL-3.0",
   "environment": "server",
   "entrypoints": {
     "main": [

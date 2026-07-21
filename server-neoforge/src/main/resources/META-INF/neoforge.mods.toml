@@ -6,7 +6,7 @@ modId = "mcu-manifest-gen"
 version = "${version}"
 displayName = "MCU Manifest Generator"
 description = "Generate mcumanifest workspace from installed server mods."
-license = "MIT"
+license = "GPL-3.0"
 
 [[dependencies.mcu-manifest-gen]]
 modId = "neoforge"
