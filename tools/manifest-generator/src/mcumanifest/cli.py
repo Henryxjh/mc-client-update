@@ -234,12 +234,29 @@ def cmd_list(args):
     if not mods:
         print("No mods in workspace.")
         return
-    print(f"{'modid':<30} {'name':<30} {'variants':<4}")
-    print("-" * 70)
-    for mid, mdata in mods.items():
-        name = mdata.get("name", mid)
-        vc = len(mdata.get("variants", []))
-        print(f"{mid:<30} {name:<30} {vc:<4}")
+    if args.file:
+        print(f"{'modid':<30} {'name':<30} {'v':<3} {'file'}")
+        print("-" * 90)
+        for mid, mdata in mods.items():
+            name = mdata.get("name", mid)
+            variants = mdata.get("variants", [])
+            vc = len(variants)
+            if vc == 0:
+                print(f"{mid:<30} {name:<30} {vc:<3} -")
+            else:
+                for i, v in enumerate(variants):
+                    lf = v.get("localFile") or v.get("fileName") or "-"
+                    if i == 0:
+                        print(f"{mid:<30} {name:<30} {vc:<3} {lf}")
+                    else:
+                        print(f"{'':<30} {'':<30} {'':<3} {lf}")
+    else:
+        print(f"{'modid':<30} {'name':<30} {'variants':<4}")
+        print("-" * 70)
+        for mid, mdata in mods.items():
+            name = mdata.get("name", mid)
+            vc = len(mdata.get("variants", []))
+            print(f"{mid:<30} {name:<30} {vc:<4}")
 
 
 def cmd_set_license(args):
@@ -471,6 +488,7 @@ complete -c mcumanifest -n "__fish_use_subcommand" -a add-manual -d "Add a manua
 complete -c mcumanifest -n "__fish_use_subcommand" -a add-delete -d "Add a mod-level delete action"
 complete -c mcumanifest -n "__fish_use_subcommand" -a remove -d "Remove a mod or variant"
 complete -c mcumanifest -n "__fish_use_subcommand" -a list -d "List mods in workspace"
+complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s f -l file -d "Show local file paths"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-license -d "Set license for a mod"
 complete -c mcumanifest -n "__fish_use_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
 complete -c mcumanifest -n "__fish_use_subcommand" -a build -d "Build the client-update-manifest.json"
@@ -629,7 +647,8 @@ def main():
     p_remove.add_argument("--arch", dest="arch", choices=sorted(constants.SUPPORTED_ARCH), help="CPU architecture")
 
     # list
-    sub.add_parser("list", help="List mods in workspace")
+    p_list = sub.add_parser("list", help="List mods in workspace")
+    p_list.add_argument("-f", "--file", action="store_true", help="Show local file paths")
 
     # set-license
     p_set_lic = sub.add_parser("set-license", help="Set license for a mod")
