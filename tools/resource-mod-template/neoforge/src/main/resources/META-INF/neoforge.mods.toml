@@ -1,0 +1,7 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+
+[[mods]]
+modId = "{{MODID}}"
+version = "{{VERSION}}"
+displayName = "{{MODID}}"

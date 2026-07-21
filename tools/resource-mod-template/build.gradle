@@ -1,0 +1,9 @@
+plugins {
+    id 'base'
+}
+
+version = '1.0.0'
+
+tasks.register('buildAll') {
+    dependsOn ':common:build', ':fabric:build', ':neoforge:build'
+}

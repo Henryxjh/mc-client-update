@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "{{MODID}}",
+  "version": "{{VERSION}}",
+  "name": "{{MODID}}",
+  "entrypoints": {
+    "main": ["io.github.henryxjh.resourcemod.FabricEntrypoint"]
+  }
+}
