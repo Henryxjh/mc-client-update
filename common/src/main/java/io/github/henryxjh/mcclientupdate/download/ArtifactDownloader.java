@@ -47,7 +47,7 @@ public final class ArtifactDownloader {
         INTERRUPTED
     }
 
-    private static final String USER_AGENT = "mc-client-update/0.2.0";
+    private static final String USER_AGENT = "mc-client-update/0.3.0";
     private static final String STAGING_DIR = ".mc-client-update/downloads";
     private static final int BUFFER_SIZE = 64 * 1024;
 
