@@ -286,6 +286,9 @@ public final class WorkspaceGenerator {
             if (processedModIds.contains(existingId)) {
                 continue;
             }
+            if (ignoredSet.contains(existingId)) {
+                continue; // preserve workspace entry as-is for ignored mods
+            }
 
             JsonObject modEntry = modsObj.getAsJsonObject(existingId);
             boolean required = modEntry.has("required") && modEntry.get("required").getAsBoolean();
