@@ -608,7 +608,7 @@ class ArtifactDownloaderTest {
         responseBody = new byte[128];
         String sha512 = sha512Hex(responseBody);
         Path stagingBase = gameDir.resolve(".mc-client-update/downloads");
-        Path destDir = stagingBase.resolve("sha512-" + sha512);
+        Path destDir = stagingBase.resolve("sha512-" + sha512.substring(0, 16));
         Files.createDirectories(destDir);
         // Create a directory with the same name as the target file to cause Files.move to fail
         Path conflictDir = destDir.resolve("mod.jar");
@@ -649,7 +649,7 @@ class ArtifactDownloaderTest {
         String sha256 = sha256Hex(responseBody);
         String sha512 = sha512Hex(responseBody);
         Path stagingBase = gameDir.resolve(".mc-client-update/downloads");
-        Path destDir = stagingBase.resolve("sha512-" + sha512);
+        Path destDir = stagingBase.resolve("sha512-" + sha512.substring(0, 16));
         Files.createDirectories(destDir);
         Path cachedFile = destDir.resolve("mod.jar");
         Files.write(cachedFile, responseBody);
@@ -687,7 +687,7 @@ class ArtifactDownloaderTest {
         responseBody = new byte[200];
         String sha512 = sha512Hex(responseBody);
         Path stagingBase = gameDir.resolve(".mc-client-update/downloads");
-        Path destDir = stagingBase.resolve("sha512-" + sha512);
+        Path destDir = stagingBase.resolve("sha512-" + sha512.substring(0, 16));
         Files.createDirectories(destDir);
         Path cachedFile = destDir.resolve("mod.jar");
         // write wrong content

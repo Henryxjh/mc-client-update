@@ -60,10 +60,10 @@ class ArtifactInstallerTest {
         } else {
             full = hashes.sha256();
         }
-        if (full == null || full.length() < 32) {
+        if (full == null || full.length() < 16) {
             throw new IllegalArgumentException("hash too short for canonical name: " + full);
         }
-        String hash = full.substring(0, 32);
+        String hash = full.substring(0, 16);
         return modId + "-" + artifact.version() + "-" + hash + ".jar";
     }
 
@@ -529,7 +529,7 @@ class ArtifactInstallerTest {
 
         String fullHash = stagedHashes.sha512() != null && !stagedHashes.sha512().isEmpty()
                 ? stagedHashes.sha512() : stagedHashes.sha256();
-        String hash = fullHash.substring(0, 32);
+        String hash = fullHash.substring(0, 16);
         // sanitised version replaces /, ! and spaces with underscores
         assertTrue(installed.fileName().startsWith("abc-1_2_3__-"));
         assertTrue(installed.fileName().endsWith("-" + hash + ".jar"));
@@ -581,7 +581,7 @@ class ArtifactInstallerTest {
         InstalledArtifact installed = res.installed().get(0);
         assertEquals("ADD", installed.action());
 
-        String expectedHash = stagedHashes.sha256().substring(0, 32);
+        String expectedHash = stagedHashes.sha256().substring(0, 16);
         String expectedFileName = "mod-a" + "-" + artifact.version() + "-" + expectedHash + ".jar";
         assertEquals(expectedFileName, installed.fileName());
         Path expectedPath = modsDir.resolve(expectedFileName);
@@ -668,7 +668,7 @@ class ArtifactInstallerTest {
     }
 
     @Test
-    void sha512HashTruncatedTo32() throws IOException {
+    void sha512HashTruncatedTo16() throws IOException {
         Path gameDir = gameDir();
         Path modsDir = gameDir.resolve("mods");
         Files.createDirectories(modsDir);
@@ -705,8 +705,8 @@ class ArtifactInstallerTest {
         InstalledArtifact installed = res.installed().get(0);
         assertEquals("ADD", installed.action());
 
-        // hash part should be first 32 chars of sha512
-        String expectedHash = stagedHashes.sha512().substring(0, 32);
+        // hash part should be first 16 chars of sha512
+        String expectedHash = stagedHashes.sha512().substring(0, 16);
         String expectedFileName = "mod-t" + "-1.0-" + expectedHash + ".jar";
         assertEquals(expectedFileName, installed.fileName());
         Path expectedPath = modsDir.resolve(expectedFileName);
