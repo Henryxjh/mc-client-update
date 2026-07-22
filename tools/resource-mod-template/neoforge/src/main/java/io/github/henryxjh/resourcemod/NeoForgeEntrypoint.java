@@ -25,12 +25,12 @@ public final class NeoForgeEntrypoint {
     public NeoForgeEntrypoint(IEventBus modEventBus) {
         modEventBus.addListener(this::onCommonSetup);
 
-        NeoForge.EVENT_BUS.addListener((AddPackFindersEvent event) -> {
+        modEventBus.addListener((AddPackFindersEvent event) -> {
             Path jarPath = ModList.get().getModFileById(MOD_ID).getFile().getFilePath();
             List<String> packs = ResourceExtractor.findResourcePacks(jarPath);
             for (String packName : packs) {
                 event.addPackFinders(
-                        ResourceLocation.fromNamespaceAndPath(MOD_ID, packName),
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "resource-pack/" + packName),
                         PackType.CLIENT_RESOURCES,
                         Component.literal(packName),
                         PackSource.BUILT_IN,

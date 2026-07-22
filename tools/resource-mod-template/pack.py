@@ -92,6 +92,25 @@ def main():
     if not resources.is_dir():
         sys.exit(f"Resources directory not found: {resources}")
 
+    # Validate resource-pack/ folder names
+    rp_dir = resources / "resource-pack"
+    if rp_dir.is_dir():
+        valid_rp_name = re.compile(r'^[a-z0-9][a-z0-9/._-]*$')
+        bad_names = []
+        for child in sorted(rp_dir.iterdir()):
+            if child.is_dir():
+                if not valid_rp_name.match(child.name):
+                    bad_names.append(child.name)
+        if bad_names:
+            print("\nError: Invalid resource-pack folder names found:",
+                  file=sys.stderr)
+            for name in bad_names:
+                suggestion = re.sub(r'[^a-z0-9/._-]', '_', name.lower())
+                print(f"  - {name}  → rename to: {suggestion}",
+                      file=sys.stderr)
+            sys.exit("\nResource pack folder names must match [a-z0-9/._-] "
+                     "(lowercase only). Please rename the folders above.")
+
     output = Path(args.output) if args.output else Path(f"{args.modid}.jar")
 
     with tempfile.TemporaryDirectory() as tmp:
