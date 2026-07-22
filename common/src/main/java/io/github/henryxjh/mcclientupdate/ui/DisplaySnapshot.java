@@ -10,7 +10,7 @@ import java.util.List;
  */
 public final class DisplaySnapshot {
 
-    public enum Phase { DOWNLOAD, INSTALL }
+    public enum Phase { DOWNLOAD, INSTALL, COMPLETE }
 
     private final Phase phase;
     private final int itemIndex;
@@ -30,12 +30,18 @@ public final class DisplaySnapshot {
     private final long phaseDownloadedBytes;
     private final List<ItemResult> recentResults;
 
+    // Completion summary fields
+    private final List<String> installedSummary;
+    private final List<String> manualSummary;
+    private final List<String> failedSummary;
+
     DisplaySnapshot(Phase phase, int itemIndex, int totalItems, long phaseStartMs,
                     String currentItemName, long currentItemTotalBytes, long currentBytesRead,
                     String currentExtra, String currentModIds, String currentUrl,
                     String speedText, int doneCount, int failCount, int manualCount,
                     long phaseTotalBytes, long phaseDownloadedBytes,
-                    List<ItemResult> recentResults) {
+                    List<ItemResult> recentResults,
+                    List<String> installedSummary, List<String> manualSummary, List<String> failedSummary) {
         this.phase = phase;
         this.itemIndex = itemIndex;
         this.totalItems = totalItems;
@@ -54,6 +60,12 @@ public final class DisplaySnapshot {
         this.phaseDownloadedBytes = phaseDownloadedBytes;
         this.recentResults = recentResults != null
                 ? List.copyOf(recentResults) : Collections.emptyList();
+        this.installedSummary = installedSummary != null
+                ? List.copyOf(installedSummary) : Collections.emptyList();
+        this.manualSummary = manualSummary != null
+                ? List.copyOf(manualSummary) : Collections.emptyList();
+        this.failedSummary = failedSummary != null
+                ? List.copyOf(failedSummary) : Collections.emptyList();
     }
 
     public Phase phase() { return phase; }
@@ -73,6 +85,33 @@ public final class DisplaySnapshot {
     public long phaseTotalBytes() { return phaseTotalBytes; }
     public long phaseDownloadedBytes() { return phaseDownloadedBytes; }
     public List<ItemResult> recentResults() { return recentResults; }
+    public List<String> installedSummary() { return installedSummary; }
+    public List<String> manualSummary() { return manualSummary; }
+    public List<String> failedSummary() { return failedSummary; }
+
+    // ---- Builder methods for UpdateProgressDisplay ----
+
+    static DisplaySnapshot forProgress(Phase phase, int itemIndex, int totalItems, long phaseStartMs,
+            String currentItemName, long currentItemTotalBytes, long currentBytesRead,
+            String currentExtra, String currentModIds, String currentUrl,
+            String speedText, int doneCount, int failCount, int manualCount,
+            long phaseTotalBytes, long phaseDownloadedBytes,
+            List<ItemResult> recentResults) {
+        return new DisplaySnapshot(phase, itemIndex, totalItems, phaseStartMs,
+                currentItemName, currentItemTotalBytes, currentBytesRead,
+                currentExtra, currentModIds, currentUrl,
+                speedText, doneCount, failCount, manualCount,
+                phaseTotalBytes, phaseDownloadedBytes,
+                recentResults, null, null, null);
+    }
+
+    static DisplaySnapshot forCompletion(List<String> installed, List<String> manual, List<String> failed) {
+        return new DisplaySnapshot(Phase.COMPLETE, 0, 0, 0,
+                "", 0, 0, "", "", "", "",
+                0, 0, 0, 0, 0,
+                Collections.emptyList(),
+                installed, manual, failed);
+    }
 
     /** Result entry for a recently completed item. */
     public static final class ItemResult {

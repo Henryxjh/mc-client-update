@@ -3,6 +3,7 @@ package io.github.henryxjh.mcclientupdate;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -121,8 +122,8 @@ public final class ClientUpdateBootstrap {
         }
 
         UpdateProgressDisplay.start(platform);
-        DownloadBatchResult batchResult;
-        InstallBatchResult installResult;
+        DownloadBatchResult batchResult = null;
+        InstallBatchResult installResult = null;
         try {
             try {
                 URI manifestUri = config.manifestUri().orElseThrow();
@@ -200,6 +201,11 @@ public final class ClientUpdateBootstrap {
         }
         // ---------------------------------------------------
         } finally {
+            // Build completion overlay before stopping the display thread
+            UpdateProgressDisplay.showCompletion(
+                    installResult != null ? buildInstalledSummary(installResult) : List.of(),
+                    batchResult != null ? buildManualSummary(batchResult) : List.of(),
+                    buildFailedSummary(batchResult, installResult));
             UpdateProgressDisplay.stop();
         }
 
@@ -232,5 +238,42 @@ public final class ClientUpdateBootstrap {
             throw new DownloadException(
                     UpdateAttentionMessage.downloadFailureMessage(attentionText));
         }
+    }
+
+    private static List<String> buildInstalledSummary(InstallBatchResult installResult) {
+        List<String> result = new ArrayList<>();
+        if (installResult == null) return result;
+        for (InstalledArtifact a : installResult.installed()) {
+            String modIds = String.join(", ", a.modIds());
+            result.add(a.fileName() + " (" + a.action() + ") mods: " + modIds);
+        }
+        return result;
+    }
+
+    private static List<String> buildManualSummary(DownloadBatchResult batchResult) {
+        List<String> result = new ArrayList<>();
+        if (batchResult == null) return result;
+        for (ManualUpdate m : batchResult.manualUpdates()) {
+            String modIds = String.join(", ", m.modIds());
+            result.add(m.fileName() + " → " + m.pageUrl() + " mods: " + modIds);
+        }
+        return result;
+    }
+
+    private static List<String> buildFailedSummary(DownloadBatchResult batchResult, InstallBatchResult installResult) {
+        List<String> result = new ArrayList<>();
+        if (batchResult != null) {
+            for (DownloadFailure f : batchResult.failed()) {
+                String modIds = String.join(", ", f.modIds());
+                result.add("下载: " + f.fileName() + " " + f.category() + " mods: " + modIds);
+            }
+        }
+        if (installResult != null) {
+            for (InstallFailure f : installResult.failures()) {
+                String modIds = String.join(", ", f.modIds());
+                result.add("安装: " + f.fileName() + " " + f.category() + " mods: " + modIds);
+            }
+        }
+        return result;
     }
 }

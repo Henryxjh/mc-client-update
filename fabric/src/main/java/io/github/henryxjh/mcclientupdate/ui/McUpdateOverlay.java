@@ -23,6 +23,7 @@ public final class McUpdateOverlay {
     private static final int TEXT_GRAY = 0xFFAAAAAA;
     private static final int TEXT_GREEN = 0xFF55FF55;
     private static final int TEXT_RED = 0xFFFF5555;
+    private static final int TEXT_GOLD = 0xFFFFAA00;
     private static final int BAR_WIDTH = 200;
     private static final int BAR_HEIGHT = 6;
     private static final int BAR_BORDER = 1;
@@ -32,6 +33,11 @@ public final class McUpdateOverlay {
     public static void renderOverlay(DrawContext graphics) {
         DisplaySnapshot snap = UpdateProgressDisplay.getSnapshot();
         if (snap == null) return;
+
+        if (snap.phase() == DisplaySnapshot.Phase.COMPLETE) {
+            renderComplete(graphics, snap);
+            return;
+        }
 
         int w = graphics.getScaledWindowWidth();
         int h = graphics.getScaledWindowHeight();
@@ -94,6 +100,106 @@ public final class McUpdateOverlay {
                 topY += 11;
             }
         }
+    }
+
+    // ---- Completion screen --------------------------------------------
+
+    private static final int MAX_LINES_PER_SECTION = 4;
+
+    private static void renderComplete(DrawContext graphics, DisplaySnapshot snap) {
+        int w = graphics.getScaledWindowWidth();
+        int h = graphics.getScaledWindowHeight();
+        TextRenderer font = MinecraftClient.getInstance().textRenderer;
+
+        graphics.fill(0, 0, w, h, BG_COLOR);
+
+        int centerX = w / 2;
+        int topY = h / 3;
+        int leftX = centerX - 140;
+
+        // --- header (always visible) ---
+        graphics.drawCenteredTextWithShadow(font, "§6mc-client-update §r更新完成",
+                centerX, topY, TEXT_WHITE);
+        topY += 20;
+
+        graphics.drawCenteredTextWithShadow(font, "§e重启以应用更新",
+                centerX, topY, TEXT_GOLD);
+        topY += 18;
+
+        // Summary counts on one line
+        int installedCnt = snap.installedSummary().size();
+        int manualCnt = snap.manualSummary().size();
+        int failedCnt = snap.failedSummary().size();
+        String summary = "§a✓ 已安装: " + installedCnt
+                + "  §6↓ 手动: " + manualCnt
+                + "  §c✗ 失败: " + failedCnt;
+        graphics.drawCenteredTextWithShadow(font, summary, centerX, topY, TEXT_WHITE);
+        topY += 20;
+
+        // --- detail lists ---
+        // Installed
+        List<String> installed = snap.installedSummary();
+        if (!installed.isEmpty()) {
+            int showN = Math.min(installed.size(), MAX_LINES_PER_SECTION);
+            graphics.drawTextWithShadow(font, "§a已安装:",
+                    leftX, topY, TEXT_GREEN);
+            topY += 13;
+            for (int i = 0; i < showN; i++) {
+                graphics.drawTextWithShadow(font, "  " + truncate(installed.get(i), 50),
+                        leftX, topY, TEXT_WHITE);
+                topY += 11;
+            }
+            if (installed.size() > MAX_LINES_PER_SECTION) {
+                graphics.drawTextWithShadow(font, "  ... 还有 " + (installed.size() - MAX_LINES_PER_SECTION) + " 项",
+                        leftX, topY, TEXT_GRAY);
+                topY += 11;
+            }
+            topY += 4;
+        }
+
+        // Manual
+        List<String> manual = snap.manualSummary();
+        if (!manual.isEmpty()) {
+            int showM = Math.min(manual.size(), MAX_LINES_PER_SECTION);
+            graphics.drawTextWithShadow(font, "§6需要手动更新:",
+                    leftX, topY, TEXT_GOLD);
+            topY += 13;
+            for (int i = 0; i < showM; i++) {
+                graphics.drawTextWithShadow(font, "  " + truncate(manual.get(i), 50),
+                        leftX, topY, TEXT_GRAY);
+                topY += 11;
+            }
+            if (manual.size() > MAX_LINES_PER_SECTION) {
+                graphics.drawTextWithShadow(font, "  ... 还有 " + (manual.size() - MAX_LINES_PER_SECTION) + " 项",
+                        leftX, topY, TEXT_GRAY);
+                topY += 11;
+            }
+            topY += 4;
+        }
+
+        // Failed
+        List<String> failed = snap.failedSummary();
+        if (!failed.isEmpty()) {
+            int showF = Math.min(failed.size(), MAX_LINES_PER_SECTION);
+            graphics.drawTextWithShadow(font, "§c失败:",
+                    leftX, topY, TEXT_RED);
+            topY += 13;
+            for (int i = 0; i < showF; i++) {
+                graphics.drawTextWithShadow(font, "  " + truncate(failed.get(i), 50),
+                        leftX, topY, TEXT_RED);
+                topY += 11;
+            }
+            if (failed.size() > MAX_LINES_PER_SECTION) {
+                graphics.drawTextWithShadow(font, "  ... 还有 " + (failed.size() - MAX_LINES_PER_SECTION) + " 项",
+                        leftX, topY, TEXT_GRAY);
+                topY += 11;
+            }
+        }
+    }
+
+    private static String truncate(String s, int maxLen) {
+        if (s.length() <= maxLen) return s;
+        return s.substring(0, maxLen - 3) + "...";
     }
 
     private static void drawBar(DrawContext g, int centerX, int y, int width, int height, long cur, long total) {

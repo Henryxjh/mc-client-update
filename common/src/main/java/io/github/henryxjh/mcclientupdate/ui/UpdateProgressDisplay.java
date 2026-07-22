@@ -457,7 +457,7 @@ public final class UpdateProgressDisplay {
     }
 
     private static void buildSnapshot() {
-        snapshot = new DisplaySnapshot(
+        snapshot = DisplaySnapshot.forProgress(
                 currentPhase == Phase.DOWNLOAD
                         ? DisplaySnapshot.Phase.DOWNLOAD
                         : DisplaySnapshot.Phase.INSTALL,
@@ -467,6 +467,15 @@ public final class UpdateProgressDisplay {
                 currentSpeedText, doneCount, failCount, manualCount,
                 phaseTotalBytes, phaseDownloadedBytes,
                 new ArrayList<>(recentResults));
+    }
+
+    /**
+     * Sets the snapshot to a completion summary. The overlay will display
+     * this until the game restarts.
+     */
+    public static void showCompletion(
+            List<String> installed, List<String> manual, List<String> failed) {
+        snapshot = DisplaySnapshot.forCompletion(installed, manual, failed);
     }
 
     // ---- Swing window management --------------------------------------
