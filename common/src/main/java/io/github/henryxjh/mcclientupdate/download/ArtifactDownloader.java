@@ -165,7 +165,7 @@ public final class ArtifactDownloader {
                 hex = expectedSha256.orElseThrow();
                 hexPrefix = "sha256-";
             }
-            Path destDir = stagingBase.resolve(hexPrefix + hex);
+            Path destDir = stagingBase.resolve(hexPrefix + hex.substring(0, 16));
             Path destFile = destDir.resolve(fileName);
 
             if (Files.isRegularFile(destFile)) {

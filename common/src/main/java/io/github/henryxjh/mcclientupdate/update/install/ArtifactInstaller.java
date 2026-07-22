@@ -610,10 +610,10 @@ public final class ArtifactInstaller {
     }
 
     private static String shortHash(String fullHash) {
-        if (fullHash == null || fullHash.length() < 32) {
+        if (fullHash == null || fullHash.length() < 16) {
             throw new IllegalArgumentException("hash too short for canonical name: " + fullHash);
         }
-        return fullHash.substring(0, 32);
+        return fullHash.substring(0, 16);
     }
 
     private static void markRemainingDeletedInterrupted(
