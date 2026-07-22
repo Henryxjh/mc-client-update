@@ -15,6 +15,15 @@ public final class FabricEntrypoint implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // If running under Sinytra Connector on NeoForge, the NeoForge
+        // entrypoint already handles resource registration. Skip Fabric
+        // init to avoid double-registration.
+        try {
+            Class.forName("org.sinytra.connector.ConnectorCoremods");
+            return;
+        } catch (ClassNotFoundException ignored) {
+        }
+
         FabricLoader loader = FabricLoader.getInstance();
 
         // Find which mod owns this entrypoint

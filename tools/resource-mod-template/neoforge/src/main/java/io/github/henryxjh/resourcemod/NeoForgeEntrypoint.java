@@ -10,7 +10,6 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
-import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
 
 import java.nio.file.Path;
@@ -23,6 +22,14 @@ public final class NeoForgeEntrypoint {
     private static final String MOD_ID = "{{MODID}}";
 
     public NeoForgeEntrypoint(IEventBus modEventBus) {
+        // If Kilt is present, it handles registration via the Fabric
+        // entrypoint. Skip NeoForge init to avoid double-registration.
+        try {
+            Class.forName("xyz.bluspring.kilt.Kilt");
+            return;
+        } catch (ClassNotFoundException ignored) {
+        }
+
         modEventBus.addListener(this::onCommonSetup);
 
         modEventBus.addListener((AddPackFindersEvent event) -> {
