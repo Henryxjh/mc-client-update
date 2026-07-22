@@ -27,3 +27,7 @@ side="CLIENT"
 
 [features.mc_client_update]
 javaVersion="[21,)"
+
+[[mixins]]
+config="mixins.mcclientupdate.json"
+client=true

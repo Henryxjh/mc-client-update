@@ -3,6 +3,7 @@ package io.github.henryxjh.mcclientupdate.ui;
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 
 import java.awt.GraphicsEnvironment;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
@@ -101,6 +102,18 @@ public final class UpdateProgressDisplay {
     private static JLabel swingSourceLabel;
     private static JLabel swingUrlLabel;
     private static JLabel swingTotalLabel;
+
+    // Per-phase byte-level tracking
+    private static long phaseTotalBytes;
+    private static long phaseDownloadedBytes;
+    private static long currentBytesRead;
+
+    // Recent item results for overlay display (max 10 entries)
+    private static final List<DisplaySnapshot.ItemResult> recentResults = new ArrayList<>();
+    private static final int MAX_RECENT = 10;
+
+    // Volatile snapshot for lock-free cross-thread reads (render thread → read, display thread → write)
+    private static volatile DisplaySnapshot snapshot;
 
     // ---- Public API ---------------------------------------------------
 
@@ -233,6 +246,16 @@ public final class UpdateProgressDisplay {
         QUEUE.offer(new PhaseDone(ok, failed, 0, duration));
     }
 
+    // ---- Snapshot (for MC Overlay rendering) --------------------------
+
+    /**
+     * Returns a thread-safe snapshot of the current display state.
+     * Called by the render thread each frame. Returns null if not started.
+     */
+    public static DisplaySnapshot getSnapshot() {
+        return snapshot;
+    }
+
     // ---- Event loop (runs on display thread) --------------------------
 
     private static void eventLoop() {
@@ -277,6 +300,11 @@ public final class UpdateProgressDisplay {
         doneCount = 0;
         failCount = 0;
         manualCount = 0;
+        phaseTotalBytes = event.totalBytes();
+        phaseDownloadedBytes = 0;
+        currentBytesRead = 0;
+        recentResults.clear();
+        buildSnapshot();
 
         if (event.phase() == Phase.DOWNLOAD) {
             platform.log("--- Download phase: " + event.totalItems() + " files, "
@@ -320,9 +348,11 @@ public final class UpdateProgressDisplay {
         platform.log(sb.toString());
 
         updateSwingItemStart();
+        buildSnapshot();
     }
 
     private static void handleProgressTick(ProgressTick event) {
+        currentBytesRead = event.bytesRead();
         if (currentItemTotalBytes <= 0) {
             return;
         }
@@ -346,6 +376,7 @@ public final class UpdateProgressDisplay {
         // Log throttling
         if (lastProgressLogMs > 0 && now - lastProgressLogMs < PROGRESS_LOG_INTERVAL_MS) {
             updateSwingProgress(event.bytesRead());
+            buildSnapshot();
             return;
         }
         lastProgressLogMs = now;
@@ -355,14 +386,23 @@ public final class UpdateProgressDisplay {
                 + formatBytes(event.bytesRead()) + " / " + formatBytes(currentItemTotalBytes));
 
         updateSwingProgress(event.bytesRead());
+        buildSnapshot();
     }
 
     private static void handleItemDone(ItemDone event) {
         if (event.success()) {
             doneCount++;
+            phaseDownloadedBytes += currentItemTotalBytes;
         } else {
             failCount++;
         }
+
+        // Record for overlay recent results
+        if (recentResults.size() >= MAX_RECENT) {
+            recentResults.remove(0);
+        }
+        recentResults.add(new DisplaySnapshot.ItemResult(
+                currentItemName, event.success(), event.message()));
 
         String prefix = event.success() ? "  OK " : "  FAIL ";
         if (event.success()) {
@@ -372,6 +412,7 @@ public final class UpdateProgressDisplay {
         }
 
         updateSwingItemDone();
+        buildSnapshot();
     }
 
     private static void handlePhaseDone(PhaseDone event) {
@@ -400,16 +441,32 @@ public final class UpdateProgressDisplay {
         platform.log(sb.toString());
 
         updateSwingPhaseDone();
+        buildSnapshot();
     }
 
     private static void handleItemUrl(ItemUrl event) {
         currentUrl = event.url();
         updateSwingUrl();
+        buildSnapshot();
     }
 
     private static void handleItemModIds(ItemModIds event) {
         currentModIds = String.join(", ", event.modIds());
         updateSwingMods();
+        buildSnapshot();
+    }
+
+    private static void buildSnapshot() {
+        snapshot = new DisplaySnapshot(
+                currentPhase == Phase.DOWNLOAD
+                        ? DisplaySnapshot.Phase.DOWNLOAD
+                        : DisplaySnapshot.Phase.INSTALL,
+                itemIndex, totalItems, phaseStartMs,
+                currentItemName, currentItemTotalBytes, currentBytesRead,
+                currentExtra, currentModIds, currentUrl,
+                currentSpeedText, doneCount, failCount, manualCount,
+                phaseTotalBytes, phaseDownloadedBytes,
+                new ArrayList<>(recentResults));
     }
 
     // ---- Swing window management --------------------------------------
