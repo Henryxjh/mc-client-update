@@ -125,6 +125,7 @@ public final class UpdateProgressDisplay {
         Objects.requireNonNull(ctx, "platform");
         platform = ctx;
         running = true;
+        snapshot = null; // clear any leftover from previous session
 
         // Try to create Swing window; degrade gracefully on any failure
         if (!GraphicsEnvironment.isHeadless()) {
@@ -165,6 +166,8 @@ public final class UpdateProgressDisplay {
         }
         // Dispose Swing window
         disposeSwingWindow();
+        // Clear overlay on next frame
+        snapshot = null;
     }
 
     // ---- Phase lifecycle ----------------------------------------------

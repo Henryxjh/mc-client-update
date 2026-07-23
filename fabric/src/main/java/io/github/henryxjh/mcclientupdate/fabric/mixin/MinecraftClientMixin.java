@@ -13,9 +13,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class MinecraftClientMixin {
 
     @Inject(method = "render", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/util/Window;swapBuffers()V",
-            shift = At.Shift.BEFORE))
-    private void onPreSwapBuffers(boolean tick, CallbackInfo ci) {
+            target = "Lnet/minecraft/client/render/GameRenderer;render(FJZ)V",
+            shift = At.Shift.AFTER))
+    private void onPostGameRender(boolean tick, CallbackInfo ci) {
         if (UpdateProgressDisplay.getSnapshot() != null) {
             MinecraftClient mc = (MinecraftClient) (Object) this;
             DrawContext graphics = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());

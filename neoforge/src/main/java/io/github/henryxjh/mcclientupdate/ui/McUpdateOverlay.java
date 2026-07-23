@@ -39,16 +39,17 @@ public final class McUpdateOverlay {
             return;
         }
 
-        int w = graphics.guiWidth();
-        int h = graphics.guiHeight();
-        Font font = Minecraft.getInstance().font;
+        Minecraft mc = Minecraft.getInstance();
+        int w = mc.getWindow().getWidth();
+        int h = mc.getWindow().getHeight();
+        Font font = mc.font;
 
         graphics.fill(0, 0, w, h, BG_COLOR);
 
         int centerX = w / 2;
         int topY = h / 3;
 
-        String phaseLabel = snap.phase() == DisplaySnapshot.Phase.DOWNLOAD ? "下载中..." : "安装中...";
+        String phaseLabel = snap.phase() == DisplaySnapshot.Phase.DOWNLOAD ? "Downloading..." : "Installing...";
         graphics.drawCenteredString(font, "§6mc-client-update §r" + phaseLabel, centerX, topY, TEXT_WHITE);
         topY += 18;
 
@@ -107,9 +108,10 @@ public final class McUpdateOverlay {
     private static final int MAX_LINES_PER_SECTION = 4;
 
     private static void renderComplete(GuiGraphics graphics, DisplaySnapshot snap) {
-        int w = graphics.guiWidth();
-        int h = graphics.guiHeight();
-        Font font = Minecraft.getInstance().font;
+        Minecraft mc = Minecraft.getInstance();
+        int w = mc.getWindow().getWidth();
+        int h = mc.getWindow().getHeight();
+        Font font = mc.font;
 
         graphics.fill(0, 0, w, h, BG_COLOR);
 
@@ -118,11 +120,11 @@ public final class McUpdateOverlay {
         int leftX = centerX - 140;
 
         // --- header (always visible) ---
-        graphics.drawCenteredString(font, "§6mc-client-update §r更新完成",
+        graphics.drawCenteredString(font, "§6mc-client-update §rUpdate Complete",
                 centerX, topY, TEXT_WHITE);
         topY += 20;
 
-        graphics.drawCenteredString(font, "§e重启以应用更新",
+        graphics.drawCenteredString(font, "§eRestart to apply updates",
                 centerX, topY, TEXT_GOLD);
         topY += 18;
 
@@ -130,9 +132,9 @@ public final class McUpdateOverlay {
         int installedCnt = snap.installedSummary().size();
         int manualCnt = snap.manualSummary().size();
         int failedCnt = snap.failedSummary().size();
-        String summary = "§a✓ 已安装: " + installedCnt
-                + "  §6↓ 手动: " + manualCnt
-                + "  §c✗ 失败: " + failedCnt;
+        String summary = "§a✓ Installed: " + installedCnt
+                + "  §6Manual: " + manualCnt
+                + "  §cFailed: " + failedCnt;
         graphics.drawCenteredString(font, summary, centerX, topY, TEXT_WHITE);
         topY += 20;
 
@@ -141,7 +143,7 @@ public final class McUpdateOverlay {
         List<String> installed = snap.installedSummary();
         if (!installed.isEmpty()) {
             int showN = Math.min(installed.size(), MAX_LINES_PER_SECTION);
-            graphics.drawString(font, "§a已安装:",
+            graphics.drawString(font, "§aInstalled:",
                     leftX, topY, TEXT_GREEN);
             topY += 13;
             for (int i = 0; i < showN; i++) {
@@ -150,7 +152,7 @@ public final class McUpdateOverlay {
                 topY += 11;
             }
             if (installed.size() > MAX_LINES_PER_SECTION) {
-                graphics.drawString(font, "  ... 还有 " + (installed.size() - MAX_LINES_PER_SECTION) + " 项",
+                graphics.drawString(font, "  ... and " + (installed.size() - MAX_LINES_PER_SECTION) + " 项",
                         leftX, topY, TEXT_GRAY);
                 topY += 11;
             }
@@ -161,7 +163,7 @@ public final class McUpdateOverlay {
         List<String> manual = snap.manualSummary();
         if (!manual.isEmpty()) {
             int showM = Math.min(manual.size(), MAX_LINES_PER_SECTION);
-            graphics.drawString(font, "§6需要手动更新:",
+            graphics.drawString(font, "§6Manual:",
                     leftX, topY, TEXT_GOLD);
             topY += 13;
             for (int i = 0; i < showM; i++) {
@@ -170,7 +172,7 @@ public final class McUpdateOverlay {
                 topY += 11;
             }
             if (manual.size() > MAX_LINES_PER_SECTION) {
-                graphics.drawString(font, "  ... 还有 " + (manual.size() - MAX_LINES_PER_SECTION) + " 项",
+                graphics.drawString(font, "  ... and " + (manual.size() - MAX_LINES_PER_SECTION) + " 项",
                         leftX, topY, TEXT_GRAY);
                 topY += 11;
             }
@@ -181,7 +183,7 @@ public final class McUpdateOverlay {
         List<String> failed = snap.failedSummary();
         if (!failed.isEmpty()) {
             int showF = Math.min(failed.size(), MAX_LINES_PER_SECTION);
-            graphics.drawString(font, "§c失败:",
+            graphics.drawString(font, "§cFailed:",
                     leftX, topY, TEXT_RED);
             topY += 13;
             for (int i = 0; i < showF; i++) {
@@ -190,7 +192,7 @@ public final class McUpdateOverlay {
                 topY += 11;
             }
             if (failed.size() > MAX_LINES_PER_SECTION) {
-                graphics.drawString(font, "  ... 还有 " + (failed.size() - MAX_LINES_PER_SECTION) + " 项",
+                graphics.drawString(font, "  ... and " + (failed.size() - MAX_LINES_PER_SECTION) + " 项",
                         leftX, topY, TEXT_GRAY);
                 topY += 11;
             }
