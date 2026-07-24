@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mcumanifest
+Source: https://example.invalid/mc-client-update
+
+Files: *
+Copyright: 2026 Henry
+License: custom
+ This package follows the license policy of the containing mc-client-update
+ project. No separate upstream license file is provided for the manifest
+ generator yet.

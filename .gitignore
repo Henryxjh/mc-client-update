@@ -23,18 +23,6 @@ test-mod/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.makepkg-src/
-.makepkg-dist/
-
-# Arch makepkg artifacts for the manifest generator package.
-tools/manifest-generator/pkg/
-tools/manifest-generator/src/mcumanifest-*/
-tools/manifest-generator/*.pkg.tar*
-tools/manifest-generator/*.src.tar*
-tools/manifest-generator/*.sig
-tools/manifest-generator/*.buildinfo
-tools/manifest-generator/*.BUILDINFO
-tools/manifest-generator/*.MTREE
 
 # Logs and OS files
 *.log

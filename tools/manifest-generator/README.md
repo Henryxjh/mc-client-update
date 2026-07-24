@@ -468,3 +468,44 @@ mcumanifest set-license own_closed_mod "Custom" --allow-redistribution
 10. license 策略检查。
 
 本文档是后续实现 `mcumanifest` 的功能规格；实现代码应以这里的行为为准。
+
+## Debian 源码包
+
+本目录包含 Debian source package 元数据，源包名为 `mcumanifest`，二进制包名为
+`python3-mcumanifest`。
+
+二进制包声明的 Python 运行时依赖为：
+
+```text
+python3 (>= 3.13.5), python3 (<< 3.14)
+```
+
+在本仓库中只需要 `dpkg-source` 即可生成源码包：
+
+```bash
+bash tools/manifest-generator/scripts/build-debian-source.sh
+```
+
+生成文件会写入：
+
+```text
+tools/manifest-generator/.deb-dist/
+```
+
+包括：
+
+- `mcumanifest_<version>.orig.tar.gz`
+- `mcumanifest_<version>-1.debian.tar.xz`
+- `mcumanifest_<version>-1.dsc`
+
+在 Debian 系统上构建二进制 `.deb`：
+
+```bash
+cd tools/manifest-generator/.deb-dist
+dpkg-source -x mcumanifest_*.dsc
+cd mcumanifest-*/
+sudo apt-get build-dep .
+dpkg-buildpackage -us -uc -b
+```
+
+生成的 `python3-mcumanifest_*.deb` 会位于源码目录的上一层。

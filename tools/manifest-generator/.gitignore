@@ -1,0 +1,26 @@
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Arch makepkg artifacts
+pkg/
+src/mcumanifest-*/
+.makepkg-src/
+.makepkg-dist/
+*.pkg.tar*
+*.src.tar*
+*.sig
+*.buildinfo
+*.BUILDINFO
+*.MTREE
+
+# Debian packaging artifacts
+.deb-build/
+.deb-dist/
+*.deb
+*.dsc
+*.build
+*.changes
+*.debian.tar.*
+*.orig.tar.*
