@@ -121,6 +121,12 @@ public final class ClientUpdateBootstrap {
                     + " targetVersion=" + version);
         }
 
+        // If no candidates, skip any further progress display / download / install.
+        if (scanResult.candidates().isEmpty()) {
+            platform.log("No update candidates; nothing to do.");
+            return;
+        }
+
         UpdateProgressDisplay.start(platform);
         DownloadBatchResult batchResult = null;
         InstallBatchResult installResult = null;
@@ -206,6 +212,7 @@ public final class ClientUpdateBootstrap {
                     installResult != null ? buildInstalledSummary(installResult) : List.of(),
                     batchResult != null ? buildManualSummary(batchResult) : List.of(),
                     buildFailedSummary(batchResult, installResult));
+            holdCompletionDisplay(config, platform);
             UpdateProgressDisplay.stop();
         }
 
@@ -237,6 +244,20 @@ public final class ClientUpdateBootstrap {
         } else if (anyFailureOrManual) {
             throw new DownloadException(
                     UpdateAttentionMessage.downloadFailureMessage(attentionText));
+        }
+    }
+
+    private static void holdCompletionDisplay(ClientUpdateConfig config, PlatformContext platform) {
+        int holdSeconds = config.completionHoldSeconds();
+        if (holdSeconds <= 0) {
+            return;
+        }
+        platform.log("Keeping update result visible for " + holdSeconds + "s before exit.");
+        try {
+            Thread.sleep(holdSeconds * 1000L);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            platform.log("Update result hold was interrupted.");
         }
     }
 

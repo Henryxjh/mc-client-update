@@ -62,7 +62,8 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
   "allowInsecureHttp": false,
   "cleanupBackupsAfterDays": 14,
   "cleanupDownloadCacheAfterDays": 30,
-  "minecraftVersionMismatchAction": "fail"
+  "minecraftVersionMismatchAction": "fail",
+  "completionHoldSeconds": 8
 }
 ```
 
@@ -73,6 +74,7 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 - `cleanupDownloadCacheAfterDays`（默认 30）：删除 `.mc-client-update/downloads/`
   下的过期文件和空目录。设为 0 禁用。
 - 两项值必须介于 0 和 3650 之间；负数或越界将在启动时报错。
+- `completionHoldSeconds`（默认 8）：更新流程结束后，进度/结果界面在退出前保持显示的秒数。设为 0 时不等待；负数会按 0 处理。
 
 填写 `manifestUrl` 后启用启动检查；留空时不联网。更新地址默认必须使用 HTTPS。
 配置中还包含两项可选清理字段（见上）；缺失时使用各自的默认值。

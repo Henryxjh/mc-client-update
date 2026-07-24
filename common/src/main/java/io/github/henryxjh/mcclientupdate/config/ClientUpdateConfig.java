@@ -28,6 +28,7 @@ public final class ClientUpdateConfig {
     private static final int DEFAULT_CLEANUP_BACKUPS_AFTER_DAYS = 14;
     private static final int DEFAULT_CLEANUP_DOWNLOAD_CACHE_AFTER_DAYS = 30;
     private static final int MAX_CLEANUP_AFTER_DAYS = 3650;
+    private static final int DEFAULT_COMPLETION_HOLD_SECONDS = 8;
 
     private final URI manifestUri;
     private final Duration connectTimeout;
@@ -35,6 +36,7 @@ public final class ClientUpdateConfig {
     private final int cleanupBackupsAfterDays;
     private final int cleanupDownloadCacheAfterDays;
     private final String minecraftVersionMismatchAction;
+    private final int completionHoldSeconds;
 
     private ClientUpdateConfig(
             URI manifestUri,
@@ -42,7 +44,8 @@ public final class ClientUpdateConfig {
             Duration readTimeout,
             int cleanupBackupsAfterDays,
             int cleanupDownloadCacheAfterDays,
-            String minecraftVersionMismatchAction) {
+            String minecraftVersionMismatchAction,
+            int completionHoldSeconds) {
         this.manifestUri = manifestUri;
         this.connectTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.readTimeout = Objects.requireNonNull(readTimeout, "readTimeout");
@@ -50,6 +53,7 @@ public final class ClientUpdateConfig {
         this.cleanupDownloadCacheAfterDays = cleanupDownloadCacheAfterDays;
         this.minecraftVersionMismatchAction = Objects.requireNonNull(
                 minecraftVersionMismatchAction, "minecraftVersionMismatchAction");
+        this.completionHoldSeconds = completionHoldSeconds;
     }
 
     public static ClientUpdateConfig load(Path gameDirectory) {
@@ -79,6 +83,7 @@ public final class ClientUpdateConfig {
                 "cleanupDownloadCacheAfterDays", json.cleanupDownloadCacheAfterDays, configPath);
 
         String mismatchAction = validateMismatchAction(json.minecraftVersionMismatchAction, configPath);
+        int completionHoldSeconds = validateCompletionHoldSeconds(json.completionHoldSeconds, configPath);
 
         return new ClientUpdateConfig(
                 manifestUri,
@@ -86,7 +91,8 @@ public final class ClientUpdateConfig {
                 Duration.ofSeconds(readTimeoutSeconds),
                 cleanupBackups,
                 cleanupCache,
-                mismatchAction);
+                mismatchAction,
+                completionHoldSeconds);
     }
 
     public Optional<URI> manifestUri() {
@@ -120,6 +126,11 @@ public final class ClientUpdateConfig {
      */
     public String minecraftVersionMismatchAction() {
         return minecraftVersionMismatchAction;
+    }
+
+    /** Seconds to keep the completion result visible before exiting. */
+    public int completionHoldSeconds() {
+        return completionHoldSeconds;
     }
 
     /** Endpoint suitable for logs: user info, query parameters and fragments are removed. */
@@ -178,6 +189,13 @@ public final class ClientUpdateConfig {
         return days;
     }
 
+    private static int validateCompletionHoldSeconds(int seconds, Path configPath) {
+        if (seconds < 0) {
+            return 0;
+        }
+        return seconds;
+    }
+
     private static String validateMismatchAction(String raw, Path configPath) {
         if (raw == null) {
             throw new IllegalStateException(
@@ -229,5 +247,6 @@ public final class ClientUpdateConfig {
         private int cleanupBackupsAfterDays = DEFAULT_CLEANUP_BACKUPS_AFTER_DAYS;
         private int cleanupDownloadCacheAfterDays = DEFAULT_CLEANUP_DOWNLOAD_CACHE_AFTER_DAYS;
         private String minecraftVersionMismatchAction = "fail";
+        private int completionHoldSeconds = DEFAULT_COMPLETION_HOLD_SECONDS;
     }
 }

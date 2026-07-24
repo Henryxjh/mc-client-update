@@ -16,14 +16,17 @@ class ClientUpdateConfigTest {
     Path gameDirectory;
 
     @Test
-    void createsDisabledDefaultConfiguration() {
+    void createsDisabledDefaultConfiguration() throws IOException {
         ClientUpdateConfig config = ClientUpdateConfig.load(gameDirectory);
 
+        Path configFile = gameDirectory.resolve("config").resolve(ClientUpdateConfig.FILE_NAME);
         assertFalse(config.updatesEnabled());
-        assertTrue(Files.isRegularFile(gameDirectory.resolve("config").resolve(ClientUpdateConfig.FILE_NAME)));
+        assertTrue(Files.isRegularFile(configFile));
+        assertTrue(Files.readString(configFile).contains("\"completionHoldSeconds\""));
         assertEquals(10, config.connectTimeout().toSeconds());
         assertEquals(30, config.readTimeout().toSeconds());
         assertEquals("fail", config.minecraftVersionMismatchAction());
+        assertEquals(8, config.completionHoldSeconds());
     }
 
     @Test
@@ -84,6 +87,34 @@ class ClientUpdateConfigTest {
                 """);
         ClientUpdateConfig config = ClientUpdateConfig.load(gameDirectory);
         assertEquals("ignore", config.minecraftVersionMismatchAction());
+    }
+
+    @Test
+    void loadsCompletionHoldSeconds() throws IOException {
+        writeConfig("""
+                {
+                  "manifestUrl": "https://example.com/client.json",
+                  "completionHoldSeconds": 0
+                }
+                """);
+
+        ClientUpdateConfig config = ClientUpdateConfig.load(gameDirectory);
+
+        assertEquals(0, config.completionHoldSeconds());
+    }
+
+    @Test
+    void treatsNegativeCompletionHoldSecondsAsZero() throws IOException {
+        writeConfig("""
+                {
+                  "manifestUrl": "https://example.com/client.json",
+                  "completionHoldSeconds": -1
+                }
+                """);
+
+        ClientUpdateConfig config = ClientUpdateConfig.load(gameDirectory);
+
+        assertEquals(0, config.completionHoldSeconds());
     }
 
     @Test

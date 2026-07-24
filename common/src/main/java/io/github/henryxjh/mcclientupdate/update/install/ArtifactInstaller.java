@@ -119,6 +119,7 @@ public final class ArtifactInstaller {
             String version = installedMod.version();
 
             UpdateProgressDisplay.itemStart(del.modId(), 0, "DELETE");
+            UpdateProgressDisplay.reportModIds(List.of(del.modId()));
 
             Path backupPath = originalJar.resolveSibling(
                     "." + fileName + DELETE_SUFFIX);
@@ -183,6 +184,7 @@ public final class ArtifactInstaller {
                 actionLabel = "UNKNOWN";
             }
             UpdateProgressDisplay.itemStart(task.canonicalFileName, 0, actionLabel);
+            UpdateProgressDisplay.reportModIds(task.modIds);
 
             // Conflict detection
             boolean conflict = false;
@@ -503,6 +505,7 @@ public final class ArtifactInstaller {
         for (int i = startIdx; i < tasks.size(); i++) {
             InstallTarget remaining = tasks.get(i);
             UpdateProgressDisplay.itemStart(remaining.canonicalFileName, 0, "");
+            UpdateProgressDisplay.reportModIds(remaining.modIds);
             installFailure(failures, remaining,
                     InstallFailure.InstallFailureCategory.INTERRUPTED,
                     "Install interrupted");
@@ -623,6 +626,7 @@ public final class ArtifactInstaller {
         for (int i = startIdx; i < deleteCandidates.size(); i++) {
             UpdateCandidate c = deleteCandidates.get(i);
             UpdateProgressDisplay.itemStart(c.modId(), 0, "DELETE");
+            UpdateProgressDisplay.reportModIds(List.of(c.modId()));
             UpdateProgressDisplay.itemFail("Interrupted");
             installDeleteFailure(failures, c,
                     InstallFailure.InstallFailureCategory.INTERRUPTED,

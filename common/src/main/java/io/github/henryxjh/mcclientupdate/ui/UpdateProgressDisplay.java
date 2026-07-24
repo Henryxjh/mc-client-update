@@ -1,7 +1,6 @@
 package io.github.henryxjh.mcclientupdate.ui;
 
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
-
 import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +65,7 @@ public final class UpdateProgressDisplay {
     private static volatile boolean running;
     private static Thread displayThread;
     private static PlatformContext platform;
+    private static LoadingProgressSink sink;
 
     // Mutable state owned by the display thread
     private static Phase currentPhase;
@@ -112,7 +112,7 @@ public final class UpdateProgressDisplay {
     private static final List<DisplaySnapshot.ItemResult> recentResults = new ArrayList<>();
     private static final int MAX_RECENT = 10;
 
-    // Volatile snapshot for lock-free cross-thread reads (render thread → read, display thread → write)
+    // Volatile snapshot for lock-free cross-thread reads.
     private static volatile DisplaySnapshot snapshot;
 
     // ---- Public API ---------------------------------------------------
@@ -124,6 +124,7 @@ public final class UpdateProgressDisplay {
     public static void start(PlatformContext ctx) {
         Objects.requireNonNull(ctx, "platform");
         platform = ctx;
+        sink = ctx.loadingProgressSink();   // may return Noop
         running = true;
         snapshot = null; // clear any leftover from previous session
 
@@ -163,6 +164,13 @@ public final class UpdateProgressDisplay {
         Event event;
         while ((event = QUEUE.poll()) != null) {
             processEvent(event);
+        }
+        // Close native sink (may complete bars)
+        if (sink != null) {
+            try {
+                sink.close();
+            } catch (Exception ignored) {
+            }
         }
         // Dispose Swing window
         disposeSwingWindow();
@@ -309,6 +317,14 @@ public final class UpdateProgressDisplay {
         recentResults.clear();
         buildSnapshot();
 
+        if (sink != null) {
+            sink.phaseStart(
+                    currentPhase == Phase.DOWNLOAD ? DisplaySnapshot.Phase.DOWNLOAD
+                                                   : DisplaySnapshot.Phase.INSTALL,
+                    event.totalItems(),
+                    event.totalBytes());
+        }
+
         if (event.phase() == Phase.DOWNLOAD) {
             platform.log("--- Download phase: " + event.totalItems() + " files, "
                     + formatBytes(event.totalBytes()) + " total ---");
@@ -330,6 +346,10 @@ public final class UpdateProgressDisplay {
         currentSpeedText = "";
         currentModIds = "";
         currentUrl = "";
+
+        if (sink != null) {
+            sink.itemStart(event.name(), event.totalBytes(), event.extra());
+        }
 
         String verb = currentPhase == Phase.DOWNLOAD ? "Downloading" : "Installing";
         StringBuilder sb = new StringBuilder();
@@ -379,6 +399,7 @@ public final class UpdateProgressDisplay {
         // Log throttling
         if (lastProgressLogMs > 0 && now - lastProgressLogMs < PROGRESS_LOG_INTERVAL_MS) {
             updateSwingProgress(event.bytesRead());
+            pushProgressTickToSink(event.bytesRead());
             buildSnapshot();
             return;
         }
@@ -389,7 +410,16 @@ public final class UpdateProgressDisplay {
                 + formatBytes(event.bytesRead()) + " / " + formatBytes(currentItemTotalBytes));
 
         updateSwingProgress(event.bytesRead());
+        pushProgressTickToSink(event.bytesRead());
         buildSnapshot();
+    }
+
+    private static void pushProgressTickToSink(long bytesRead) {
+        if (sink == null) return;
+        sink.progressTick(itemIndex, totalItems,
+                currentItemTotalBytes, bytesRead,
+                currentSpeedText,
+                phaseDownloadedBytes + bytesRead, phaseTotalBytes);
     }
 
     private static void handleItemDone(ItemDone event) {
@@ -412,6 +442,13 @@ public final class UpdateProgressDisplay {
             platform.log(prefix + currentItemName + " " + event.message());
         } else {
             platform.log(prefix + currentItemName + ": " + event.message());
+        }
+
+        if (sink != null) {
+            sink.itemDone(event.success(), event.message());
+            if (currentPhase == Phase.INSTALL) {
+                sink.installCountProgress(doneCount, totalItems);
+            }
         }
 
         updateSwingItemDone();
@@ -443,6 +480,10 @@ public final class UpdateProgressDisplay {
 
         platform.log(sb.toString());
 
+        if (sink != null) {
+            sink.phaseDone(event.ok(), event.failed(), event.manual());
+        }
+
         updateSwingPhaseDone();
         buildSnapshot();
     }
@@ -450,12 +491,18 @@ public final class UpdateProgressDisplay {
     private static void handleItemUrl(ItemUrl event) {
         currentUrl = event.url();
         updateSwingUrl();
+        if (sink != null) {
+            sink.reportDownloadUrl(event.url());
+        }
         buildSnapshot();
     }
 
     private static void handleItemModIds(ItemModIds event) {
         currentModIds = String.join(", ", event.modIds());
         updateSwingMods();
+        if (sink != null) {
+            sink.reportModIds(currentModIds);
+        }
         buildSnapshot();
     }
 
@@ -479,6 +526,9 @@ public final class UpdateProgressDisplay {
     public static void showCompletion(
             List<String> installed, List<String> manual, List<String> failed) {
         snapshot = DisplaySnapshot.forCompletion(installed, manual, failed);
+        if (sink != null) {
+            sink.showCompletion(installed, manual, failed);
+        }
     }
 
     // ---- Swing window management --------------------------------------

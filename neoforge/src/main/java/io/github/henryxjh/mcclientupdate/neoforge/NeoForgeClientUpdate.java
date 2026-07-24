@@ -5,6 +5,7 @@ import io.github.henryxjh.mcclientupdate.ClientUpdateBootstrap;
 import io.github.henryxjh.mcclientupdate.platform.PlatformContext;
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
 import io.github.henryxjh.mcclientupdate.scan.ModScanException;
+import io.github.henryxjh.mcclientupdate.ui.LoadingProgressSink;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,11 @@ public final class NeoForgeClientUpdate {
                     }
                 }
                 throw new ModScanException("Minecraft version not available: minecraft mod not found");
+            }
+
+            @Override
+            public LoadingProgressSink loadingProgressSink() {
+                return new NeoForgeLoadingProgressSink();
             }
         });
     }
