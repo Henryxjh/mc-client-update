@@ -476,7 +476,7 @@ mcumanifest set-license own_closed_mod "Custom" --allow-redistribution
 ## 构建时下载 URL 重写
 
 `manifest-workspace.json` 可以包含可选的顶层字段 `buildDownloadOverrides`。
-这个字段只影响 Python 生成器在 `build` 阶段下载临时文件来计算 size/hash 的地址，
+这个字段只影响 Python 生成器在 `build` 阶段获取文件来计算 size/hash 的地址，
 不会写入最终的 `client-update-manifest.json`。
 
 示例：
@@ -497,20 +497,25 @@ mcumanifest set-license own_closed_mod "Custom" --allow-redistribution
 规则：
 
 - 只对 `direct` 下载类型且没有填写 `localFile` 的 artifact 生效。
-- `from` / `to` 都必须是非空字符串，并且必须是绝对 HTTP(S) URL 前缀。
+- `from` 必须是非空字符串，并且必须是绝对 HTTP(S) URL 前缀。
+- `to` 必须是非空字符串，允许绝对 HTTP(S) URL 前缀，或本地 `file://` URL 前缀。
+- `file://` 只支持本机路径，例如 `file:///srv/minecraft/mods/` 或 `file://localhost/srv/minecraft/mods/`。
 - 构建时按顺序检查 `urlRewrites`；第一条 `from` 是原始 `download.url` 前缀的规则生效。
 - 实际下载地址等于 `to + 原始 URL 去掉 from 后剩余的部分`。
+- 如果实际地址是 `file://`，生成器会直接读取对应文件计算 size/hash，不会下载，也不会在 `/tmp` 创建临时文件。
 - 最终 manifest 中的 `artifact.download.url` 保持原始 URL，不会被替换。
 - 如果配置格式错误，`build` 会抛出包含 `buildDownloadOverrides` / `urlRewrites` 的错误。
 
 用途：在云服务器上打包时，workspace 可以继续保存公网 HTTPS 下载地址；生成器计算
-hash/size 时可以改走同机 NGINX 的内网或本机 HTTP 地址，避免每次手动填写本地文件。
+hash/size 时可以改走同机 NGINX 的内网、本机 HTTP 地址，或直接读取服务器上的本地文件，
+避免每次手动填写本地文件。
 
 推荐通过 `config` 子命令修改该配置，避免手写 JSON：
 
 ```bash
 mcumanifest config list
 mcumanifest config add-url-rewrite --from https://cdn.example.com/mc/ --to http://127.0.0.1/mc/
+mcumanifest config add-url-rewrite --from https://cdn.example.com/mc/ --to file:///srv/minecraft/mc/
 mcumanifest config list-url-rewrites
 mcumanifest config remove-url-rewrite --from https://cdn.example.com/mc/
 mcumanifest config clear-url-rewrites --force

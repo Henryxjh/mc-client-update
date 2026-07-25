@@ -18,6 +18,34 @@ def _validate_absolute_http_url(value: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def _validate_build_rewrite_to_url(value: str) -> bool:
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme in ("http", "https"):
+        return bool(parsed.netloc)
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            return False
+        if parsed.params or parsed.query or parsed.fragment:
+            return False
+        return os.path.isabs(urllib.request.url2pathname(parsed.path))
+    return False
+
+
+def _file_url_to_path(value: str) -> str:
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme != "file":
+        raise ValueError(f"Expected file URL, got: {value}")
+    if parsed.netloc not in ("", "localhost"):
+        raise ValueError(f"Only local file:// URLs are supported, got: {value}")
+    if parsed.params or parsed.query or parsed.fragment:
+        raise ValueError(f"file:// URL must not contain params, query, or fragment: {value}")
+
+    path = urllib.request.url2pathname(parsed.path)
+    if not os.path.isabs(path):
+        raise ValueError(f"file:// URL must point to an absolute path: {value}")
+    return path
+
+
 def _load_build_url_rewrites(workspace: Dict[str, Any]) -> list[dict[str, str]]:
     overrides = workspace.get("buildDownloadOverrides")
     if overrides is None:
@@ -49,9 +77,9 @@ def _load_build_url_rewrites(workspace: Dict[str, Any]) -> list[dict[str, str]]:
             raise ValueError(
                 f"buildDownloadOverrides.urlRewrites[{idx}].from must be an absolute http(s) URL"
             )
-        if not _validate_absolute_http_url(to_prefix):
+        if not _validate_build_rewrite_to_url(to_prefix):
             raise ValueError(
-                f"buildDownloadOverrides.urlRewrites[{idx}].to must be an absolute http(s) URL"
+                f"buildDownloadOverrides.urlRewrites[{idx}].to must be an absolute http(s) or local file:// URL"
             )
         validated.append({"from": from_prefix, "to": to_prefix})
     return validated
@@ -232,7 +260,8 @@ def build_manifest(
                         )
                     compute_path = explicit_local
                 else:
-                    # No local file – download to a temporary file
+                    # No local file – either download to a temporary file, or use
+                    # a build-time file:// rewrite target directly.
                     url = download_raw.get("url")
                     if not url:
                         raise ValueError(
@@ -249,60 +278,69 @@ def build_manifest(
                     download_url = url
                     effective_download_url = effective_url
 
-                    tmp_file = tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".jar"
-                    )
-                    tmp_path = tmp_file.name
-                    try:
-                        req = urllib.request.Request(
-                            effective_url, headers={"User-Agent": _USER_AGENT}
-                        )
-                        with urllib.request.urlopen(req) as response:
-                            if response.status != 200:
-                                raise urllib.error.HTTPError(
-                                    effective_url,
-                                    response.status,
-                                    "Not OK",
-                                    response.headers,
-                                    None,
-                                )
-                            # Chunked read – avoid reading the whole file into memory
-                            while True:
-                                chunk = response.read(8192)
-                                if not chunk:
-                                    break
-                                tmp_file.write(chunk)
-                            tmp_file.flush()
-                    except urllib.error.HTTPError as e:
-                        # Clean up the temporary file
-                        try:
-                            tmp_file.close()
-                        except OSError:
-                            pass
-                        try:
-                            os.unlink(tmp_path)
-                        except OSError:
-                            pass
-                        raise ValueError(
-                            f"Download for mod '{modid}' variant {idx} returned HTTP {e.code}"
-                            " (expected 200)"
-                        ) from e
-                    except Exception as e:
-                        try:
-                            tmp_file.close()
-                        except OSError:
-                            pass
-                        try:
-                            os.unlink(tmp_path)
-                        except OSError:
-                            pass
-                        raise ValueError(
-                            f"Download for mod '{modid}' variant {idx} failed: {e}"
-                        ) from e
+                    effective_parsed = urllib.parse.urlparse(effective_url)
+                    if effective_parsed.scheme == "file":
+                        compute_path = _file_url_to_path(effective_url)
+                        if not os.path.isfile(compute_path):
+                            raise ValueError(
+                                f"Build-time file rewrite for mod '{modid}' variant {idx} "
+                                f"points to a missing file: {compute_path}"
+                            )
                     else:
-                        tmp_file.close()
-                        compute_path = tmp_path
-                        use_temp = True
+                        tmp_file = tempfile.NamedTemporaryFile(
+                            delete=False, suffix=".jar"
+                        )
+                        tmp_path = tmp_file.name
+                        try:
+                            req = urllib.request.Request(
+                                effective_url, headers={"User-Agent": _USER_AGENT}
+                            )
+                            with urllib.request.urlopen(req) as response:
+                                if response.status != 200:
+                                    raise urllib.error.HTTPError(
+                                        effective_url,
+                                        response.status,
+                                        "Not OK",
+                                        response.headers,
+                                        None,
+                                    )
+                                # Chunked read – avoid reading the whole file into memory
+                                while True:
+                                    chunk = response.read(8192)
+                                    if not chunk:
+                                        break
+                                    tmp_file.write(chunk)
+                                tmp_file.flush()
+                        except urllib.error.HTTPError as e:
+                            # Clean up the temporary file
+                            try:
+                                tmp_file.close()
+                            except OSError:
+                                pass
+                            try:
+                                os.unlink(tmp_path)
+                            except OSError:
+                                pass
+                            raise ValueError(
+                                f"Download for mod '{modid}' variant {idx} returned HTTP {e.code}"
+                                " (expected 200)"
+                            ) from e
+                        except Exception as e:
+                            try:
+                                tmp_file.close()
+                            except OSError:
+                                pass
+                            try:
+                                os.unlink(tmp_path)
+                            except OSError:
+                                pass
+                            raise ValueError(
+                                f"Download for mod '{modid}' variant {idx} failed: {e}"
+                            ) from e
+                        else:
+                            tmp_file.close()
+                            compute_path = tmp_path
+                            use_temp = True
             else:
                 raise ValueError(
                     f"Unsupported download type '{dl_type}' for mod '{modid}' variant {idx}"

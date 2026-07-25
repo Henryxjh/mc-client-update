@@ -3,6 +3,7 @@ import json
 import os
 import sys
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from mcumanifest import builder, constants, validator, workspace
 
@@ -495,6 +496,19 @@ def _is_absolute_http_url(value):
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def _is_absolute_rewrite_to_url(value):
+    parsed = urlparse(value)
+    if parsed.scheme in ("http", "https"):
+        return bool(parsed.netloc)
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            return False
+        if parsed.params or parsed.query or parsed.fragment:
+            return False
+        return os.path.isabs(url2pathname(parsed.path))
+    return False
+
+
 def _url_rewrites(ws):
     overrides = ws.setdefault("buildDownloadOverrides", {})
     if not isinstance(overrides, dict):
@@ -509,8 +523,14 @@ def _validate_rewrite_url(name, value):
     if not value or not isinstance(value, str):
         print(f"Error: {name} must be a non-empty URL", file=sys.stderr)
         sys.exit(1)
-    if not _is_absolute_http_url(value):
-        print(f"Error: {name} must be an absolute http(s) URL", file=sys.stderr)
+    if name == "--to":
+        valid = _is_absolute_rewrite_to_url(value)
+        expected = "an absolute http(s) or local file:// URL"
+    else:
+        valid = _is_absolute_http_url(value)
+        expected = "an absolute http(s) URL"
+    if not valid:
+        print(f"Error: {name} must be {expected}", file=sys.stderr)
         sys.exit(1)
 
 

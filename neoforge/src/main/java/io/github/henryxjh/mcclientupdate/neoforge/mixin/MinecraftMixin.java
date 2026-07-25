@@ -36,6 +36,7 @@ public abstract class MinecraftMixin {
         DisplaySnapshot snap = UpdateProgressDisplay.getSnapshot();
         if (snap == null) return;
 
+        @SuppressWarnings("resource")
         Minecraft mc = (Minecraft) (Object) this;
         int w = mc.getWindow().getGuiScaledWidth();
         int h = mc.getWindow().getGuiScaledHeight();

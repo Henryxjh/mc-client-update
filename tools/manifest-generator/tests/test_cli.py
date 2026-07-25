@@ -224,6 +224,27 @@ def test_config_add_list_remove_url_rewrite(tmp_path, runner):
     assert ws_data["buildDownloadOverrides"]["urlRewrites"] == []
 
 
+def test_config_add_url_rewrite_accepts_file_to_url(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    files_dir = tmp_path / "files"
+    files_dir.mkdir()
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    res = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                 "--from", "https://cdn.example.com/mc/",
+                 "--to", files_dir.as_uri() + "/")
+    assert res.returncode == 0
+
+    ws_data = json.loads(ws_file.read_text())
+    assert ws_data["buildDownloadOverrides"]["urlRewrites"] == [
+        {
+            "from": "https://cdn.example.com/mc/",
+            "to": files_dir.as_uri() + "/",
+        }
+    ]
+
+
 def test_config_url_rewrite_duplicate_requires_force(tmp_path, runner):
     ws_file = tmp_path / "ws.json"
     runner("--workspace", str(ws_file), "init",

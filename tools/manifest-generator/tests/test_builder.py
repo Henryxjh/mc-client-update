@@ -478,6 +478,57 @@ def test_build_direct_download_url_rewrite_first_match_wins(ws, direct_http_serv
     assert events[0]["effectiveDownloadUrl"] == local_url
 
 
+def test_build_direct_download_file_url_rewrite_uses_file_without_temp(
+    ws, tmp_path, monkeypatch
+):
+    jar_dir = tmp_path / "files"
+    jar_dir.mkdir()
+    jar_path = jar_dir / "mod.jar"
+    content = b"hello-from-file-rewrite"
+    jar_path.write_bytes(content)
+
+    original_url = "https://cdn.example.com/mirror/mod.jar"
+    ws["buildDownloadOverrides"] = {
+        "urlRewrites": [
+            {"from": "https://cdn.example.com/mirror/", "to": jar_dir.as_uri() + "/"},
+        ]
+    }
+    ws["mods"] = {
+        "filerewrite": {
+            "name": "File Rewrite",
+            "required": True,
+            "license": "mit",
+            "variants": [
+                {
+                    "selector": {},
+                    "priority": 0,
+                    "version": "1.0",
+                    "localFile": None,
+                    "fileName": "mod.jar",
+                    "download": {"type": "direct", "url": original_url},
+                }
+            ],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    def fail_temp_file(*args, **kwargs):
+        raise AssertionError("file:// rewrite must not create a temporary file")
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", fail_temp_file)
+
+    events = []
+    manifest = build_manifest(ws, progress_callback=events.append)
+    artifact = manifest["mods"]["filerewrite"]["variants"][0]["artifact"]
+
+    assert artifact["size"] == len(content)
+    assert artifact["hashes"]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert artifact["download"]["url"] == original_url
+    assert events[0]["downloadUrl"] == original_url
+    assert events[0]["effectiveDownloadUrl"] == jar_path.as_uri()
+    assert events[0]["source"] == "local"
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
@@ -497,8 +548,12 @@ def test_build_direct_download_url_rewrite_first_match_wins(ws, direct_http_serv
             r"buildDownloadOverrides.urlRewrites\[0\].from must be an absolute http\(s\) URL",
         ),
         (
-            {"urlRewrites": [{"from": "https://cdn.example.com/", "to": "file:///mods/"}]},
-            r"buildDownloadOverrides.urlRewrites\[0\].to must be an absolute http\(s\) URL",
+            {"urlRewrites": [{"from": "https://cdn.example.com/", "to": "file://mirror/mods/"}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].to must be an absolute http\(s\) or local file:// URL",
+        ),
+        (
+            {"urlRewrites": [{"from": "https://cdn.example.com/", "to": "file:mods/"}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].to must be an absolute http\(s\) or local file:// URL",
         ),
     ],
 )
