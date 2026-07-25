@@ -111,6 +111,21 @@ def test_fish_completion_contains_set_version_policy(runner):
     assert "-d \"Version threshold for skipping install\"" in result.stdout
 
 
+def test_fish_completion_contains_config_commands(runner):
+    result = runner("completion", "fish")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a config -d "Manage workspace configuration"' in stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a add-url-rewrite -d "Add a build-time URL rewrite rule"' in stdout
+    assert 'complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a remove-url-rewrite -d "Remove a build-time URL rewrite rule"' in stdout
+    assert 'complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l from -r -d "Original URL prefix"' in stdout
+    assert 'complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l to -r -d "Build-time URL prefix"' in stdout
+    assert 'complete -c mcumanifest -n "__fish_seen_subcommand_from remove-url-rewrite" -l from -r -a "(__mcumanifest_url_rewrite_froms)" -d "Original URL prefix"' in stdout
+    assert "__mcumanifest_url_rewrite_froms" in stdout
+    assert "case --workspace --from --to" in stdout
+    assert "case '--workspace=*' '--from=*' '--to=*'" in stdout
+
+
 def test_set_version_policy_and_clear(tmp_path, runner):
     import json
     ws_file = tmp_path / "ws.json"
@@ -177,6 +192,103 @@ def test_set_version_policy_rejects_blank_version(tmp_path, runner):
                  "testmod", "--skip-if-installed-version-greater-than", " ")
     assert res.returncode != 0
     assert "must not be blank" in res.stderr.lower()
+
+
+def test_config_add_list_remove_url_rewrite(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    res = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                 "--from", "https://cdn.example.com/mc/",
+                 "--to", "http://127.0.0.1/mc/")
+    assert res.returncode == 0
+
+    ws_data = json.loads(ws_file.read_text())
+    rewrites = ws_data["buildDownloadOverrides"]["urlRewrites"]
+    assert rewrites == [
+        {
+            "from": "https://cdn.example.com/mc/",
+            "to": "http://127.0.0.1/mc/",
+        }
+    ]
+
+    listed = runner("--workspace", str(ws_file), "config", "list-url-rewrites", "-q")
+    assert listed.returncode == 0
+    assert listed.stdout.strip() == "https://cdn.example.com/mc/"
+
+    removed = runner("--workspace", str(ws_file), "config", "remove-url-rewrite",
+                     "--from", "https://cdn.example.com/mc/")
+    assert removed.returncode == 0
+    ws_data = json.loads(ws_file.read_text())
+    assert ws_data["buildDownloadOverrides"]["urlRewrites"] == []
+
+
+def test_config_url_rewrite_duplicate_requires_force(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    first = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                   "--from", "https://cdn.example.com/",
+                   "--to", "http://127.0.0.1/")
+    assert first.returncode == 0
+
+    duplicate = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                       "--from", "https://cdn.example.com/",
+                       "--to", "http://127.0.0.1/new/")
+    assert duplicate.returncode != 0
+    assert "stdin is not a terminal" in duplicate.stderr
+
+    no_overwrite = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                          "--from", "https://cdn.example.com/",
+                          "--to", "http://127.0.0.1/new/",
+                          "--no-overwrite")
+    assert no_overwrite.returncode != 0
+    assert "already exists" in no_overwrite.stderr
+
+    forced = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                    "--from", "https://cdn.example.com/",
+                    "--to", "http://127.0.0.1/new/",
+                    "--force")
+    assert forced.returncode == 0
+    ws_data = json.loads(ws_file.read_text())
+    assert ws_data["buildDownloadOverrides"]["urlRewrites"] == [
+        {
+            "from": "https://cdn.example.com/",
+            "to": "http://127.0.0.1/new/",
+        }
+    ]
+
+
+def test_config_clear_url_rewrites_requires_force_without_tty(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+    runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+           "--from", "https://cdn.example.com/",
+           "--to", "http://127.0.0.1/")
+
+    res = runner("--workspace", str(ws_file), "config", "clear-url-rewrites")
+    assert res.returncode != 0
+    assert "requires --force" in res.stderr
+
+    forced = runner("--workspace", str(ws_file), "config", "clear-url-rewrites", "--force")
+    assert forced.returncode == 0
+    ws_data = json.loads(ws_file.read_text())
+    assert ws_data["buildDownloadOverrides"]["urlRewrites"] == []
+
+
+def test_config_rejects_invalid_url(tmp_path, runner):
+    ws_file = tmp_path / "ws.json"
+    runner("--workspace", str(ws_file), "init",
+           "--manifest-id", "test", "--mc", "1.20.1", "--force")
+
+    res = runner("--workspace", str(ws_file), "config", "add-url-rewrite",
+                 "--from", "/not/url",
+                 "--to", "http://127.0.0.1/")
+    assert res.returncode != 0
+    assert "absolute http(s) URL" in res.stderr
 
 
 # ---------------------------------------------------------------------------

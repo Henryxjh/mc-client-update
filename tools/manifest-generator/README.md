@@ -8,7 +8,7 @@
 
 - `pyproject.toml` 和 `mcumanifest` 命令行入口。
 - `manifest-workspace.json` 读写。
-- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`add-delete`、`remove`、`list`、`set-license`、`set-version-policy`、`build`、`validate`、`completion` 子命令。
+- `init`、`scan`、`add-hosted`、`add-direct`、`add-manual`、`add-delete`、`remove`、`list`、`set-license`、`set-version-policy`、`config`、`build`、`validate`、`completion` 子命令。
 - `list` 支持 `-f`/`--file` 显示每个 variant 的本地文件路径，`-q`/`--quiet` 仅输出 modid 或文件列表。
 - selector 枚举：loader、OS、CPU 架构（含 `loongarch64`）。
 - 重复 modid + selector 的冲突处理：非交互失败，`--force` 覆盖，`--no-overwrite` 失败。
@@ -151,6 +151,7 @@ mcumanifest remove
 mcumanifest list
 mcumanifest set-license
 mcumanifest set-version-policy
+mcumanifest config
 mcumanifest build
 mcumanifest validate
 mcumanifest completion
@@ -171,6 +172,8 @@ mcumanifest list
 mcumanifest set-license create MIT --allow-redistribution
 mcumanifest set-version-policy create --skip-if-installed-version-greater-than 1.2.0
 mcumanifest set-version-policy create --clear-skip-if-installed-version-greater-than
+mcumanifest config add-url-rewrite --from https://cdn.example.com/mc/ --to http://127.0.0.1/mc/
+mcumanifest config list-url-rewrites
 mcumanifest build --base-url https://cdn.example.com/mc/1.21.1/ --output client-update-manifest.json
 mcumanifest validate --manifest client-update-manifest.json --schema ../../docs/client-update-manifest.schema.json
 mcumanifest completion bash
@@ -190,6 +193,7 @@ mcumanifest completion fish
 - `list`：以表格展示当前 workspace。
 - `set-license`：修改 license 和 `allowRedistribution`。
 - `set-version-policy`：设置或清除 `skipIfInstalledVersionGreaterThan` 字段，用于控制当已安装版本大于指定值时跳过更新。
+- `config`：管理 workspace 顶层配置。第一版支持列出配置，以及增删/清空构建时 direct 下载 URL 重写规则。
 - `build`：计算 hash/size，生成最终 manifest，并执行校验。默认输出每个 artifact 的处理进度；可用 `--no-progress` 关闭。
 - `validate`：只校验现有 manifest 或 workspace。
 - `completion`：输出 shell 自动补全脚本，至少支持 bash、zsh、fish。
@@ -468,6 +472,52 @@ mcumanifest set-license own_closed_mod "Custom" --allow-redistribution
 10. license 策略检查。
 
 本文档是后续实现 `mcumanifest` 的功能规格；实现代码应以这里的行为为准。
+
+## 构建时下载 URL 重写
+
+`manifest-workspace.json` 可以包含可选的顶层字段 `buildDownloadOverrides`。
+这个字段只影响 Python 生成器在 `build` 阶段下载临时文件来计算 size/hash 的地址，
+不会写入最终的 `client-update-manifest.json`。
+
+示例：
+
+```json
+{
+  "buildDownloadOverrides": {
+    "urlRewrites": [
+      {
+        "from": "https://cdn.example.com/mc/",
+        "to": "http://127.0.0.1/mc/"
+      }
+    ]
+  }
+}
+```
+
+规则：
+
+- 只对 `direct` 下载类型且没有填写 `localFile` 的 artifact 生效。
+- `from` / `to` 都必须是非空字符串，并且必须是绝对 HTTP(S) URL 前缀。
+- 构建时按顺序检查 `urlRewrites`；第一条 `from` 是原始 `download.url` 前缀的规则生效。
+- 实际下载地址等于 `to + 原始 URL 去掉 from 后剩余的部分`。
+- 最终 manifest 中的 `artifact.download.url` 保持原始 URL，不会被替换。
+- 如果配置格式错误，`build` 会抛出包含 `buildDownloadOverrides` / `urlRewrites` 的错误。
+
+用途：在云服务器上打包时，workspace 可以继续保存公网 HTTPS 下载地址；生成器计算
+hash/size 时可以改走同机 NGINX 的内网或本机 HTTP 地址，避免每次手动填写本地文件。
+
+推荐通过 `config` 子命令修改该配置，避免手写 JSON：
+
+```bash
+mcumanifest config list
+mcumanifest config add-url-rewrite --from https://cdn.example.com/mc/ --to http://127.0.0.1/mc/
+mcumanifest config list-url-rewrites
+mcumanifest config remove-url-rewrite --from https://cdn.example.com/mc/
+mcumanifest config clear-url-rewrites --force
+```
+
+重复添加相同 `--from` 的规则时，交互终端会询问是否覆盖；非交互环境默认失败。
+可用 `--force` 覆盖，或用 `--no-overwrite` 明确要求重复时报错。
 
 ## Debian 源码包
 

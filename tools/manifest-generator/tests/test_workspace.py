@@ -16,12 +16,12 @@ from mcumanifest.workspace import (
 
 def test_init_workspace_is_empty():
     ws = init_workspace()
-    assert ws == {"mods": {}}
+    assert ws == {"mods": {}, "buildDownloadOverrides": {"urlRewrites": []}}
 
 
 def test_load_workspace_non_existent_returns_empty():
     ws = load_workspace("/nonexistent/path/workspace.json")
-    assert ws == {"mods": {}}
+    assert ws == {"mods": {}, "buildDownloadOverrides": {"urlRewrites": []}}
 
 
 def test_save_and_load_roundtrip():

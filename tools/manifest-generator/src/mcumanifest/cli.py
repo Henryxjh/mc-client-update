@@ -490,6 +490,145 @@ def cmd_build(args):
     print(f"Manifest written to {out}")
 
 
+def _is_absolute_http_url(value):
+    parsed = urlparse(value)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _url_rewrites(ws):
+    overrides = ws.setdefault("buildDownloadOverrides", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("buildDownloadOverrides must be an object")
+    rewrites = overrides.setdefault("urlRewrites", [])
+    if not isinstance(rewrites, list):
+        raise ValueError("buildDownloadOverrides.urlRewrites must be a list")
+    return rewrites
+
+
+def _validate_rewrite_url(name, value):
+    if not value or not isinstance(value, str):
+        print(f"Error: {name} must be a non-empty URL", file=sys.stderr)
+        sys.exit(1)
+    if not _is_absolute_http_url(value):
+        print(f"Error: {name} must be an absolute http(s) URL", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_config(args):
+    ws = workspace.load_workspace(args.workspace)
+    try:
+        if args.config_action == "list":
+            rewrites = _url_rewrites(ws)
+            print(f"baseUrl: {ws.get('baseUrl', '-')}")
+            minimum_loader_versions = ws.get("minimumLoaderVersions", {})
+            if minimum_loader_versions:
+                print("minimumLoaderVersions:")
+                for loader, version in sorted(minimum_loader_versions.items()):
+                    print(f"  {loader}: {version}")
+            else:
+                print("minimumLoaderVersions: -")
+            print("buildDownloadOverrides.urlRewrites:")
+            if not rewrites:
+                print("  -")
+            else:
+                for idx, rule in enumerate(rewrites, start=1):
+                    print(f"  {idx}. {rule.get('from', '')} -> {rule.get('to', '')}")
+            return
+
+        if args.config_action == "list-url-rewrites":
+            rewrites = _url_rewrites(ws)
+            if args.quiet:
+                for rule in rewrites:
+                    print(rule.get("from", ""))
+                return
+            if not rewrites:
+                print("No build-time URL rewrites configured.")
+                return
+            for idx, rule in enumerate(rewrites, start=1):
+                print(f"{idx}. from={rule.get('from', '')} to={rule.get('to', '')}")
+            return
+
+        if args.config_action == "add-url-rewrite":
+            _validate_rewrite_url("--from", args.from_url)
+            _validate_rewrite_url("--to", args.to_url)
+            if args.force and args.no_overwrite:
+                print("Error: --force and --no-overwrite cannot be used together.", file=sys.stderr)
+                sys.exit(1)
+
+            rewrites = _url_rewrites(ws)
+            existing_idx = None
+            for idx, rule in enumerate(rewrites):
+                if rule.get("from") == args.from_url:
+                    existing_idx = idx
+                    break
+
+            new_rule = {"from": args.from_url, "to": args.to_url}
+            if existing_idx is None:
+                rewrites.append(new_rule)
+                workspace.save_workspace(ws, args.workspace)
+                print(f"Added URL rewrite: {args.from_url} -> {args.to_url}")
+                return
+
+            if args.no_overwrite:
+                print("Error: URL rewrite already exists and --no-overwrite was given.", file=sys.stderr)
+                sys.exit(1)
+            if not args.force:
+                if not sys.stdin.isatty():
+                    print("Error: URL rewrite already exists and stdin is not a terminal.", file=sys.stderr)
+                    sys.exit(1)
+                old = rewrites[existing_idx]
+                print(f"Existing rewrite: {old.get('from')} -> {old.get('to')}")
+                print(f"New rewrite:      {args.from_url} -> {args.to_url}")
+                ans = input("Overwrite? [y/N] ").strip().lower()
+                if ans != "y":
+                    print("Aborted.", file=sys.stderr)
+                    sys.exit(1)
+
+            rewrites[existing_idx] = new_rule
+            workspace.save_workspace(ws, args.workspace)
+            print(f"Updated URL rewrite: {args.from_url} -> {args.to_url}")
+            return
+
+        if args.config_action == "remove-url-rewrite":
+            _validate_rewrite_url("--from", args.from_url)
+            rewrites = _url_rewrites(ws)
+            new_rewrites = [rule for rule in rewrites if rule.get("from") != args.from_url]
+            if len(new_rewrites) == len(rewrites):
+                if args.force:
+                    print(f"No URL rewrite found for: {args.from_url}")
+                    return
+                print(f"Error: URL rewrite not found for: {args.from_url}", file=sys.stderr)
+                sys.exit(1)
+            ws["buildDownloadOverrides"]["urlRewrites"] = new_rewrites
+            workspace.save_workspace(ws, args.workspace)
+            print(f"Removed URL rewrite: {args.from_url}")
+            return
+
+        if args.config_action == "clear-url-rewrites":
+            rewrites = _url_rewrites(ws)
+            if not rewrites:
+                print("No URL rewrites to clear.")
+                return
+            if not args.force:
+                if not sys.stdin.isatty():
+                    print("Error: clearing URL rewrites requires --force when stdin is not a terminal.", file=sys.stderr)
+                    sys.exit(1)
+                ans = input(f"Clear {len(rewrites)} URL rewrite(s)? [y/N] ").strip().lower()
+                if ans != "y":
+                    print("Aborted.", file=sys.stderr)
+                    sys.exit(1)
+            ws["buildDownloadOverrides"]["urlRewrites"] = []
+            workspace.save_workspace(ws, args.workspace)
+            print(f"Cleared {len(rewrites)} URL rewrite(s).")
+            return
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Error: unknown config action", file=sys.stderr)
+    sys.exit(1)
+
+
 def cmd_validate(args):
     with open(args.manifest, "r", encoding="utf-8") as fh:
         manifest = json.load(fh)
@@ -501,7 +640,7 @@ def cmd_validate(args):
 FISH_COMPLETION = """\
 complete -c mcumanifest -f
 function __mcumanifest_seen_subcommand
-    set -l subcommands init scan add-hosted add-direct add-manual add-delete remove list set-license set-version-policy build validate completion
+    set -l subcommands init scan add-hosted add-direct add-manual add-delete remove list set-license set-version-policy config build validate completion
     set -l args (commandline -opc)
     set -l skip_next 0
     for token in $args[2..-1]
@@ -525,6 +664,31 @@ end
 function __mcumanifest_before_subcommand
     not __mcumanifest_seen_subcommand
 end
+function __mcumanifest_seen_config_action
+    set -l actions list list-url-rewrites add-url-rewrite remove-url-rewrite clear-url-rewrites
+    set -l args (commandline -opc)
+    set -l skip_next 0
+    for token in $args[2..-1]
+        if test $skip_next -eq 1
+            set skip_next 0
+            continue
+        end
+        switch $token
+            case --workspace --from --to
+                set skip_next 1
+                continue
+            case '--workspace=*' '--from=*' '--to=*'
+                continue
+        end
+        if contains -- $token $actions
+            return 0
+        end
+    end
+    return 1
+end
+function __mcumanifest_config_needs_action
+    __fish_seen_subcommand_from config; and not __mcumanifest_seen_config_action
+end
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -l workspace -r -F -d "Path to the workspace file"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a init -d "Create a new manifest workspace"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a scan -d "Import installed-mods.json into workspace"
@@ -538,6 +702,7 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s f -l file -d "S
 complete -c mcumanifest -n "__fish_seen_subcommand_from list" -s q -l quiet -d "Quiet: only modids (or files with -f)"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a set-license -d "Set license for a mod"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a set-version-policy -d "Set skip-if-installed-version-greater-than policy for a mod"
+complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a config -d "Manage workspace configuration"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a build -d "Build the client-update-manifest.json"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a validate -d "Validate an existing manifest"
 complete -c mcumanifest -n "__mcumanifest_before_subcommand" -a completion -d "Generate shell completion script"
@@ -582,6 +747,20 @@ complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -l allow-re
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l skip-if-installed-version-greater-than -r -d "Version threshold for skipping install"
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l skip-if-installed-version-greater-than-now -d "Set threshold to current variant version"
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -l clear-skip-if-installed-version-greater-than -d "Remove skip version threshold"
+# config
+complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a list -d "List workspace configuration"
+complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a list-url-rewrites -d "List build-time URL rewrite rules"
+complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a add-url-rewrite -d "Add a build-time URL rewrite rule"
+complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a remove-url-rewrite -d "Remove a build-time URL rewrite rule"
+complete -c mcumanifest -n "__mcumanifest_config_needs_action" -a clear-url-rewrites -d "Clear all build-time URL rewrite rules"
+complete -c mcumanifest -n "__fish_seen_subcommand_from list-url-rewrites" -s q -l quiet -d "Only print from URL values"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l from -r -d "Original URL prefix"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l to -r -d "Build-time URL prefix"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l force -d "Overwrite an existing rule"
+complete -c mcumanifest -n "__fish_seen_subcommand_from add-url-rewrite" -l no-overwrite -d "Fail if the rule already exists"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove-url-rewrite" -l from -r -a "(__mcumanifest_url_rewrite_froms)" -d "Original URL prefix"
+complete -c mcumanifest -n "__fish_seen_subcommand_from remove-url-rewrite" -l force -d "Do not fail if the rule is absent"
+complete -c mcumanifest -n "__fish_seen_subcommand_from clear-url-rewrites" -l force -d "Clear without confirmation"
 # build / validate
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l output -r -d "Output path"
 complete -c mcumanifest -n "__fish_seen_subcommand_from build" -l schema -r -F -d "Path to JSON Schema file"
@@ -605,6 +784,22 @@ function __mcumanifest_modids
         end
     end
     mcumanifest $ws_args list -q 2>/dev/null
+end
+function __mcumanifest_url_rewrite_froms
+    set -l ws_args
+    set -l args (commandline -opc)
+    set -l n (count $args)
+    for i in (seq $n)
+        if string match -q -- "--workspace" "$args[$i]"; and test (math "$i + 1") -le $n
+            set -l ws_index (math "$i + 1")
+            set ws_args --workspace "$args[$ws_index]"
+            break
+        else if string match -q -- "--workspace=*" "$args[$i]"
+            set ws_args --workspace (string replace -- "--workspace=" "" "$args[$i]")
+            break
+        end
+    end
+    mcumanifest $ws_args config list-url-rewrites -q 2>/dev/null
 end
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-license" -a "(__mcumanifest_modids)" -d "Mod ID"
 complete -c mcumanifest -n "__fish_seen_subcommand_from set-version-policy" -a "(__mcumanifest_modids)" -d "Mod ID"
@@ -749,6 +944,49 @@ def main():
         help="Set threshold to the current version (first variant)",
     )
 
+    # config
+    p_config = sub.add_parser("config", help="Manage workspace configuration")
+    config_sub = p_config.add_subparsers(dest="config_action", required=True)
+
+    config_list = config_sub.add_parser("list", help="List workspace configuration")
+
+    config_list_rewrites = config_sub.add_parser(
+        "list-url-rewrites",
+        help="List build-time URL rewrite rules",
+    )
+    config_list_rewrites.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Only print the from URL values",
+    )
+
+    config_add_rewrite = config_sub.add_parser(
+        "add-url-rewrite",
+        help="Add a build-time URL rewrite rule",
+    )
+    config_add_rewrite.add_argument("--from", dest="from_url", required=True, help="Original URL prefix")
+    config_add_rewrite.add_argument("--to", dest="to_url", required=True, help="Build-time URL prefix")
+    config_add_rewrite.add_argument("--force", action="store_true", help="Overwrite an existing rule")
+    config_add_rewrite.add_argument(
+        "--no-overwrite",
+        action="store_true",
+        help="Fail if a rule with the same --from already exists",
+    )
+
+    config_remove_rewrite = config_sub.add_parser(
+        "remove-url-rewrite",
+        help="Remove a build-time URL rewrite rule",
+    )
+    config_remove_rewrite.add_argument("--from", dest="from_url", required=True, help="Original URL prefix")
+    config_remove_rewrite.add_argument("--force", action="store_true", help="Do not fail if the rule is absent")
+
+    config_clear_rewrites = config_sub.add_parser(
+        "clear-url-rewrites",
+        help="Clear all build-time URL rewrite rules",
+    )
+    config_clear_rewrites.add_argument("--force", action="store_true", help="Clear without confirmation")
+
     # build
     p_build = sub.add_parser("build", help="Build the client-update-manifest.json")
     p_build.add_argument("--output", default="client-update-manifest.json", help="Output path")
@@ -782,6 +1020,7 @@ def main():
         "list": cmd_list,
         "set-license": cmd_set_license,
         "set-version-policy": cmd_set_version_policy,
+        "config": cmd_config,
         "build": cmd_build,
         "validate": cmd_validate,
         "completion": cmd_completion,

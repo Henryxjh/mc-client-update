@@ -7,7 +7,12 @@ DEFAULT_WORKSPACE_FILE = "manifest-workspace.json"
 
 def init_workspace() -> Dict[str, Any]:
     """Return an empty workspace dictionary."""
-    return {"mods": {}}
+    return {
+        "mods": {},
+        "buildDownloadOverrides": {
+            "urlRewrites": [],
+        },
+    }
 
 
 def load_workspace(path: Optional[str] = None) -> Dict[str, Any]:

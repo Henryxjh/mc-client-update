@@ -399,6 +399,116 @@ def test_build_direct_download_no_local_file(ws, direct_http_server):
     assert "localFile" not in manifest["mods"]["testdirect"]
 
 
+def test_build_direct_download_uses_workspace_url_rewrite(ws, direct_http_server):
+    local_url, server, content = direct_http_server
+    local_prefix = local_url.rsplit("/", 1)[0] + "/"
+    original_url = "https://cdn.example.com/mirror/mod.jar"
+    ws["buildDownloadOverrides"] = {
+        "urlRewrites": [
+            {"from": "https://cdn.example.com/mirror/", "to": local_prefix},
+        ]
+    }
+    ws["mods"] = {
+        "rewritten": {
+            "name": "Rewritten",
+            "required": True,
+            "license": "mit",
+            "variants": [
+                {
+                    "selector": {},
+                    "priority": 0,
+                    "version": "1.0",
+                    "localFile": None,
+                    "fileName": "mod.jar",
+                    "download": {"type": "direct", "url": original_url},
+                }
+            ],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    events = []
+    manifest = build_manifest(ws, progress_callback=events.append)
+    artifact = manifest["mods"]["rewritten"]["variants"][0]["artifact"]
+
+    assert artifact["size"] == len(content)
+    assert artifact["hashes"]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert artifact["download"]["url"] == original_url
+    assert "buildDownloadOverrides" not in manifest
+    assert events[0]["downloadUrl"] == original_url
+    assert events[0]["effectiveDownloadUrl"] == local_url
+    assert events[0]["source"] == "downloaded"
+
+
+def test_build_direct_download_url_rewrite_first_match_wins(ws, direct_http_server):
+    local_url, server, content = direct_http_server
+    local_prefix = local_url.rsplit("/", 1)[0] + "/"
+    original_url = "https://cdn.example.com/mod.jar"
+    ws["buildDownloadOverrides"] = {
+        "urlRewrites": [
+            {"from": "https://cdn.example.com/", "to": local_prefix},
+            {"from": "https://cdn.example.com/", "to": "http://127.0.0.1:1/"},
+        ]
+    }
+    ws["mods"] = {
+        "firstmatch": {
+            "name": "First Match",
+            "required": True,
+            "license": "mit",
+            "variants": [
+                {
+                    "selector": {},
+                    "priority": 0,
+                    "version": "1.0",
+                    "localFile": None,
+                    "fileName": "mod.jar",
+                    "download": {"type": "direct", "url": original_url},
+                }
+            ],
+        }
+    }
+    ws["minecraftVersion"] = "1.21.1"
+
+    events = []
+    manifest = build_manifest(ws, progress_callback=events.append)
+    artifact = manifest["mods"]["firstmatch"]["variants"][0]["artifact"]
+
+    assert artifact["size"] == len(content)
+    assert artifact["download"]["url"] == original_url
+    assert events[0]["effectiveDownloadUrl"] == local_url
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ([], "buildDownloadOverrides must be an object"),
+        ({"urlRewrites": "bad"}, "buildDownloadOverrides.urlRewrites must be a list"),
+        ({"urlRewrites": ["bad"]}, r"buildDownloadOverrides.urlRewrites\[0\] must be an object"),
+        (
+            {"urlRewrites": [{"from": "", "to": "http://127.0.0.1/"}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].from must be a non-empty string",
+        ),
+        (
+            {"urlRewrites": [{"from": "https://cdn.example.com/", "to": ""}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].to must be a non-empty string",
+        ),
+        (
+            {"urlRewrites": [{"from": "/mods/", "to": "http://127.0.0.1/"}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].from must be an absolute http\(s\) URL",
+        ),
+        (
+            {"urlRewrites": [{"from": "https://cdn.example.com/", "to": "file:///mods/"}]},
+            r"buildDownloadOverrides.urlRewrites\[0\].to must be an absolute http\(s\) URL",
+        ),
+    ],
+)
+def test_build_download_overrides_validation(ws, overrides, message):
+    ws["buildDownloadOverrides"] = overrides
+
+    with pytest.raises(ValueError, match=message):
+        build_manifest(ws)
+
+
 def test_build_direct_download_failure(ws):
     """Downloading from a closed port must raise ValueError."""
     variant = {

@@ -13,6 +13,58 @@ from mcumanifest.workspace import normalize_selector, selector_equal
 _USER_AGENT = "mcumanifest/1.0"
 
 
+def _validate_absolute_http_url(value: str) -> bool:
+    parsed = urllib.parse.urlparse(value)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _load_build_url_rewrites(workspace: Dict[str, Any]) -> list[dict[str, str]]:
+    overrides = workspace.get("buildDownloadOverrides")
+    if overrides is None:
+        return []
+    if not isinstance(overrides, dict):
+        raise ValueError("buildDownloadOverrides must be an object")
+
+    rewrites = overrides.get("urlRewrites", [])
+    if not isinstance(rewrites, list):
+        raise ValueError("buildDownloadOverrides.urlRewrites must be a list")
+
+    validated: list[dict[str, str]] = []
+    for idx, rule in enumerate(rewrites):
+        if not isinstance(rule, dict):
+            raise ValueError(
+                f"buildDownloadOverrides.urlRewrites[{idx}] must be an object"
+            )
+        from_prefix = rule.get("from")
+        to_prefix = rule.get("to")
+        if not isinstance(from_prefix, str) or not from_prefix:
+            raise ValueError(
+                f"buildDownloadOverrides.urlRewrites[{idx}].from must be a non-empty string"
+            )
+        if not isinstance(to_prefix, str) or not to_prefix:
+            raise ValueError(
+                f"buildDownloadOverrides.urlRewrites[{idx}].to must be a non-empty string"
+            )
+        if not _validate_absolute_http_url(from_prefix):
+            raise ValueError(
+                f"buildDownloadOverrides.urlRewrites[{idx}].from must be an absolute http(s) URL"
+            )
+        if not _validate_absolute_http_url(to_prefix):
+            raise ValueError(
+                f"buildDownloadOverrides.urlRewrites[{idx}].to must be an absolute http(s) URL"
+            )
+        validated.append({"from": from_prefix, "to": to_prefix})
+    return validated
+
+
+def _apply_build_url_rewrite(url: str, rewrites: list[dict[str, str]]) -> str:
+    for rule in rewrites:
+        from_prefix = rule["from"]
+        if url.startswith(from_prefix):
+            return rule["to"] + url[len(from_prefix):]
+    return url
+
+
 def add_or_update_variant(
     workspace: Dict[str, Any],
     modid: str,
@@ -84,6 +136,7 @@ def build_manifest(
         "minecraftVersion": workspace.get("minecraftVersion", "1.21.1"),
         "mods": {},
     }
+    url_rewrites = _load_build_url_rewrites(workspace)
 
     if "expiresAt" in workspace:
         manifest["expiresAt"] = workspace["expiresAt"]
@@ -159,6 +212,8 @@ def build_manifest(
             )
             compute_path = None
             use_temp = False
+            download_url = None
+            effective_download_url = None
 
             if dl_type in ("hosted", "manual"):
                 # Hosted / manual *must* have a local file that exists
@@ -190,6 +245,9 @@ def build_manifest(
                             f"Direct download URL for mod '{modid}' variant {idx} "
                             "must be an absolute http or https URL"
                         )
+                    effective_url = _apply_build_url_rewrite(url, url_rewrites)
+                    download_url = url
+                    effective_download_url = effective_url
 
                     tmp_file = tempfile.NamedTemporaryFile(
                         delete=False, suffix=".jar"
@@ -197,12 +255,12 @@ def build_manifest(
                     tmp_path = tmp_file.name
                     try:
                         req = urllib.request.Request(
-                            url, headers={"User-Agent": _USER_AGENT}
+                            effective_url, headers={"User-Agent": _USER_AGENT}
                         )
                         with urllib.request.urlopen(req) as response:
                             if response.status != 200:
                                 raise urllib.error.HTTPError(
-                                    url,
+                                    effective_url,
                                     response.status,
                                     "Not OK",
                                     response.headers,
@@ -322,6 +380,8 @@ def build_manifest(
                     "downloadType": dl_type,
                     "size": size_val,
                     "source": source,
+                    "downloadUrl": download_url,
+                    "effectiveDownloadUrl": effective_download_url,
                 }
                 progress_callback(event_dict)
 
