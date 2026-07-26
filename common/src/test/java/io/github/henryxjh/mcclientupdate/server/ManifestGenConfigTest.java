@@ -58,4 +58,19 @@ class ManifestGenConfigTest {
         assertTrue(config.isUserAllowed("eve"));
         assertFalse(config.isUserAllowed("charlie"));
     }
+
+    @Test
+    void addAndRemoveAllowedUserMutatesConfig() {
+        ManifestGenConfig config = ManifestGenConfig.load(gameDir);
+
+        assertTrue(config.addAllowedUser("alice"));
+        assertFalse(config.addAllowedUser("alice"));
+        assertEquals(List.of("alice"), config.getAllowedUsers());
+        assertTrue(config.isUserAllowed("alice"));
+
+        assertTrue(config.removeAllowedUser("alice"));
+        assertFalse(config.removeAllowedUser("alice"));
+        assertTrue(config.getAllowedUsers().isEmpty());
+        assertFalse(config.isUserAllowed("alice"));
+    }
 }

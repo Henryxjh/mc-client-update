@@ -161,6 +161,60 @@ public final class ManifestGenApi {
     }
 
     /**
+     * Adds a player name to the allowed-user list and saves the config if it changed.
+     *
+     * <p>The allow-list controls which non-console players may use manifest
+     * generator management actions. An empty list means console-only access.</p>
+     *
+     * @param username exact player name to allow
+     * @return result describing whether the config changed and the user-facing message
+     */
+    public AllowedUserChangeResult addAllowedUser(String username) {
+        String normalizedUsername = requireNonBlank(username, "username");
+        ManifestGenConfig config = loadConfig();
+        boolean changed = config.addAllowedUser(normalizedUsername);
+        if (changed) {
+            config.save(gameDirectory);
+        }
+        String message = changed
+                ? "Added \"" + normalizedUsername + "\" to allowed users."
+                : "\"" + normalizedUsername + "\" is already allowed.";
+        return new AllowedUserChangeResult(normalizedUsername, changed, config.getAllowedUsers(), message);
+    }
+
+    /**
+     * Removes a player name from the allowed-user list and saves the config if it changed.
+     *
+     * @param username exact player name to remove from the allow-list
+     * @return result describing whether the config changed and the user-facing message
+     */
+    public AllowedUserChangeResult removeAllowedUser(String username) {
+        String normalizedUsername = requireNonBlank(username, "username");
+        ManifestGenConfig config = loadConfig();
+        boolean changed = config.removeAllowedUser(normalizedUsername);
+        if (changed) {
+            config.save(gameDirectory);
+        }
+        String message = changed
+                ? "Removed \"" + normalizedUsername + "\" from allowed users."
+                : "\"" + normalizedUsername + "\" is not in allowed users.";
+        return new AllowedUserChangeResult(normalizedUsername, changed, config.getAllowedUsers(), message);
+    }
+
+    /**
+     * Lists player names currently allowed to use manifest generator management actions.
+     *
+     * @return allowed-user list and the user-facing message
+     */
+    public AllowedUserListResult listAllowedUsers() {
+        List<String> allowed = loadConfig().getAllowedUsers();
+        String message = allowed.isEmpty()
+                ? "No player users are allowed; console only."
+                : "Allowed users (" + allowed.size() + "): " + String.join(", ", allowed);
+        return new AllowedUserListResult(allowed, message);
+    }
+
+    /**
      * Returns a defensive copy of the loader-reported installed mod list.
      */
     public List<InstalledMod> installedMods() {
@@ -431,6 +485,36 @@ public final class ManifestGenApi {
             String message) {
         public IgnoreChangeResult {
             ignoredMods = List.copyOf(ignoredMods);
+        }
+    }
+
+    /**
+     * Result of adding or removing a player from the allowed-user list.
+     *
+     * @param username normalized player name passed to the operation
+     * @param changed whether the config file was changed and saved
+     * @param allowedUsers allowed-user list after the operation
+     * @param message user-facing status message
+     */
+    public record AllowedUserChangeResult(
+            String username,
+            boolean changed,
+            List<String> allowedUsers,
+            String message) {
+        public AllowedUserChangeResult {
+            allowedUsers = List.copyOf(allowedUsers);
+        }
+    }
+
+    /**
+     * Result of listing allowed users.
+     *
+     * @param allowedUsers current allowed-user list
+     * @param message user-facing status message
+     */
+    public record AllowedUserListResult(List<String> allowedUsers, String message) {
+        public AllowedUserListResult {
+            allowedUsers = List.copyOf(allowedUsers);
         }
     }
 

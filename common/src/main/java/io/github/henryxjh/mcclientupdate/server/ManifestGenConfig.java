@@ -114,6 +114,34 @@ public final class ManifestGenConfig {
         return ignoredMods.remove(modId);
     }
 
+    // ---- Allowed users management -------------------------------------
+
+    /**
+     * Adds a player name to the allow-list.
+     *
+     * @param username exact player name to allow
+     * @return {@code true} if the list changed
+     */
+    public boolean addAllowedUser(String username) {
+        Objects.requireNonNull(username, "username");
+        if (allowedUsers.contains(username)) {
+            return false;
+        }
+        allowedUsers.add(username);
+        return true;
+    }
+
+    /**
+     * Removes a player name from the allow-list.
+     *
+     * @param username exact player name to remove
+     * @return {@code true} if the list changed
+     */
+    public boolean removeAllowedUser(String username) {
+        Objects.requireNonNull(username, "username");
+        return allowedUsers.remove(username);
+    }
+
     // ---- JSON DTO -----------------------------------------------------
 
     private static class ConfigJson {

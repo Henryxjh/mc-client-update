@@ -95,6 +95,36 @@ class ManifestGenApiTest {
     }
 
     @Test
+    void allowedUserApiAddsListsChecksAndRemovesUsers() {
+        ManifestGenApi api = new ManifestGenApi(gameDir, "fabric", "1.21.1", List::of);
+
+        assertFalse(api.isUserAllowed("alice"));
+        ManifestGenApi.AllowedUserChangeResult added = api.addAllowedUser("alice");
+        assertTrue(added.changed());
+        assertEquals("Added \"alice\" to allowed users.", added.message());
+        assertTrue(added.allowedUsers().contains("alice"));
+        assertTrue(api.isUserAllowed("alice"));
+
+        ManifestGenApi.AllowedUserChangeResult duplicate = api.addAllowedUser("alice");
+        assertFalse(duplicate.changed());
+        assertEquals("\"alice\" is already allowed.", duplicate.message());
+
+        ManifestGenApi.AllowedUserListResult listed = api.listAllowedUsers();
+        assertEquals(List.of("alice"), listed.allowedUsers());
+        assertEquals("Allowed users (1): alice", listed.message());
+
+        ManifestGenApi.AllowedUserChangeResult removed = api.removeAllowedUser("alice");
+        assertTrue(removed.changed());
+        assertEquals("Removed \"alice\" from allowed users.", removed.message());
+        assertFalse(api.isUserAllowed("alice"));
+
+        ManifestGenApi.AllowedUserChangeResult missing = api.removeAllowedUser("alice");
+        assertFalse(missing.changed());
+        assertEquals("\"alice\" is not in allowed users.", missing.message());
+        assertEquals("No player users are allowed; console only.", api.listAllowedUsers().message());
+    }
+
+    @Test
     void suggestionsRespectIgnoredModsAndModsDirectory() throws Exception {
         Path modsDir = gameDir.resolve("mods");
         Path elsewhere = gameDir.resolve("elsewhere");

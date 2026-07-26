@@ -66,7 +66,18 @@ public final class FabricManifestGen implements ModInitializer {
                                         .suggests(IgnoreRemoveSuggestions.INSTANCE)
                                         .executes(this::executeIgnoreRemove)))
                         .then(literal("list")
-                                .executes(this::executeIgnoreList)));
+                                .executes(this::executeIgnoreList)))
+                .then(literal("allow")
+                        .requires(this::checkConsole)
+                        .then(literal("add")
+                                .then(argument("username", StringArgumentType.word())
+                                        .executes(this::executeAllowAdd)))
+                        .then(literal("remove")
+                                .then(argument("username", StringArgumentType.word())
+                                        .suggests(AllowedUserRemoveSuggestions.INSTANCE)
+                                        .executes(this::executeAllowRemove)))
+                        .then(literal("list")
+                                .executes(this::executeAllowList)));
 
         dispatcher.register(root);
     }
@@ -79,6 +90,10 @@ public final class FabricManifestGen implements ModInitializer {
             return ManifestGenApi.get().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
+    }
+
+    private boolean checkConsole(ServerCommandSource source) {
+        return source.getEntity() == null && source.hasPermissionLevel(4);
     }
 
     // ---- generate -----------------------------------------------------
@@ -120,6 +135,32 @@ public final class FabricManifestGen implements ModInitializer {
         return 1;
     }
 
+    // ---- allow add ----------------------------------------------------
+
+    private int executeAllowAdd(CommandContext<ServerCommandSource> ctx) {
+        String username = StringArgumentType.getString(ctx, "username");
+        ManifestGenApi.AllowedUserChangeResult result = ManifestGenApi.get().addAllowedUser(username);
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
+        return 1;
+    }
+
+    // ---- allow remove -------------------------------------------------
+
+    private int executeAllowRemove(CommandContext<ServerCommandSource> ctx) {
+        String username = StringArgumentType.getString(ctx, "username");
+        ManifestGenApi.AllowedUserChangeResult result = ManifestGenApi.get().removeAllowedUser(username);
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
+        return 1;
+    }
+
+    // ---- allow list ---------------------------------------------------
+
+    private int executeAllowList(CommandContext<ServerCommandSource> ctx) {
+        ManifestGenApi.AllowedUserListResult result = ManifestGenApi.get().listAllowedUsers();
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
+        return 1;
+    }
+
     // ---- Suggestions --------------------------------------------------
 
     private enum IgnoreAddSuggestions implements SuggestionProvider<ServerCommandSource> {
@@ -145,6 +186,20 @@ public final class FabricManifestGen implements ModInitializer {
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
             for (String id : ManifestGenApi.get().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
+            }
+            return builder.buildFuture();
+        }
+    }
+
+    private enum AllowedUserRemoveSuggestions implements SuggestionProvider<ServerCommandSource> {
+        INSTANCE;
+
+        @Override
+        public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
+                CommandContext<ServerCommandSource> ctx,
+                com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+            for (String username : ManifestGenApi.get().listAllowedUsers().allowedUsers()) {
+                builder.suggest(username);
             }
             return builder.buildFuture();
         }

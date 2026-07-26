@@ -62,7 +62,18 @@ public final class NeoForgeManifestGen {
                                         .suggests(IgnoreRemoveSuggestions.INSTANCE)
                                         .executes(this::executeIgnoreRemove)))
                         .then(literal("list")
-                                .executes(this::executeIgnoreList)));
+                                .executes(this::executeIgnoreList)))
+                .then(literal("allow")
+                        .requires(this::checkConsole)
+                        .then(literal("add")
+                                .then(argument("username", StringArgumentType.word())
+                                        .executes(this::executeAllowAdd)))
+                        .then(literal("remove")
+                                .then(argument("username", StringArgumentType.word())
+                                        .suggests(AllowedUserRemoveSuggestions.INSTANCE)
+                                        .executes(this::executeAllowRemove)))
+                        .then(literal("list")
+                                .executes(this::executeAllowList)));
 
         dispatcher.register(root);
     }
@@ -75,6 +86,10 @@ public final class NeoForgeManifestGen {
             return ManifestGenApi.get().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
+    }
+
+    private boolean checkConsole(CommandSourceStack source) {
+        return source.getEntity() == null && source.hasPermission(4);
     }
 
     // ---- generate -----------------------------------------------------
@@ -116,6 +131,32 @@ public final class NeoForgeManifestGen {
         return 1;
     }
 
+    // ---- allow add ----------------------------------------------------
+
+    private int executeAllowAdd(CommandContext<CommandSourceStack> ctx) {
+        String username = StringArgumentType.getString(ctx, "username");
+        ManifestGenApi.AllowedUserChangeResult result = ManifestGenApi.get().addAllowedUser(username);
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
+        return 1;
+    }
+
+    // ---- allow remove -------------------------------------------------
+
+    private int executeAllowRemove(CommandContext<CommandSourceStack> ctx) {
+        String username = StringArgumentType.getString(ctx, "username");
+        ManifestGenApi.AllowedUserChangeResult result = ManifestGenApi.get().removeAllowedUser(username);
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
+        return 1;
+    }
+
+    // ---- allow list ---------------------------------------------------
+
+    private int executeAllowList(CommandContext<CommandSourceStack> ctx) {
+        ManifestGenApi.AllowedUserListResult result = ManifestGenApi.get().listAllowedUsers();
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
+        return 1;
+    }
+
     // ---- Suggestions --------------------------------------------------
 
     private enum IgnoreAddSuggestions implements SuggestionProvider<CommandSourceStack> {
@@ -141,6 +182,20 @@ public final class NeoForgeManifestGen {
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
             for (String id : ManifestGenApi.get().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
+            }
+            return builder.buildFuture();
+        }
+    }
+
+    private enum AllowedUserRemoveSuggestions implements SuggestionProvider<CommandSourceStack> {
+        INSTANCE;
+
+        @Override
+        public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
+                CommandContext<CommandSourceStack> ctx,
+                com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+            for (String username : ManifestGenApi.get().listAllowedUsers().allowedUsers()) {
+                builder.suggest(username);
             }
             return builder.buildFuture();
         }
