@@ -16,15 +16,90 @@ import java.util.function.Supplier;
  *
  * <p>Server management mods should call this class instead of invoking
  * Brigadier commands or copying command implementation details. Platform
- * entrypoints provide {@code api()} factories that already know how to collect
- * the current loader's installed mod list.</p>
+ * entrypoints register the current loader context during startup; external
+ * callers can then use {@link #get()} from common code.</p>
  */
 public final class ManifestGenApi {
+
+    private static volatile Registration registration;
+    private static volatile ManifestGenApi instance;
 
     private final Path gameDirectory;
     private final String loader;
     private final String minecraftVersion;
     private final Supplier<List<InstalledMod>> installedModsSupplier;
+
+    /**
+     * Registers the platform-specific context used by {@link #get()}.
+     *
+     * <p>This is intended to be called once by the Fabric or NeoForge server
+     * entrypoint during mod startup. The API instance is still created lazily
+     * on the first {@link #get()} call, so registration does not require the
+     * full loader mod list to be queried immediately.</p>
+     *
+     * @param gameDirectory server game directory containing {@code mods/} and {@code config/}
+     * @param loader stable loader id written into generated selectors, for example {@code fabric} or {@code neoforge}
+     * @param minecraftVersionSupplier supplier returning the current Minecraft version
+     * @param installedModsSupplier supplier returning the loader-reported installed mods for the current server
+     * @throws IllegalStateException if a different context is registered after the shared API instance was created
+     */
+    public static void register(
+            Path gameDirectory,
+            String loader,
+            Supplier<String> minecraftVersionSupplier,
+            Supplier<List<InstalledMod>> installedModsSupplier) {
+        Registration newRegistration = new Registration(
+                Objects.requireNonNull(gameDirectory, "gameDirectory"),
+                requireNonBlank(loader, "loader"),
+                Objects.requireNonNull(minecraftVersionSupplier, "minecraftVersionSupplier"),
+                Objects.requireNonNull(installedModsSupplier, "installedModsSupplier"));
+
+        synchronized (ManifestGenApi.class) {
+            if (instance != null && !newRegistration.matches(instance)) {
+                throw new IllegalStateException("ManifestGenApi is already initialized for "
+                        + instance.loader() + " at " + instance.gameDirectory());
+            }
+            registration = newRegistration;
+        }
+    }
+
+    /**
+     * Returns whether a platform entrypoint has registered an API context.
+     */
+    public static boolean isRegistered() {
+        return registration != null;
+    }
+
+    /**
+     * Returns the shared manifest generator API instance for the current server.
+     *
+     * <p>External server management mods should use this method instead of
+     * calling platform-specific entrypoint classes. The returned object is a
+     * singleton for the loaded server process.</p>
+     *
+     * @throws IllegalStateException if no platform entrypoint has registered the API context yet
+     */
+    public static ManifestGenApi get() {
+        ManifestGenApi local = instance;
+        if (local == null) {
+            synchronized (ManifestGenApi.class) {
+                local = instance;
+                if (local == null) {
+                    Registration current = registration;
+                    if (current == null) {
+                        throw new IllegalStateException("ManifestGenApi has not been registered yet");
+                    }
+                    local = new ManifestGenApi(
+                            current.gameDirectory(),
+                            current.loader(),
+                            current.minecraftVersionSupplier().get(),
+                            current.installedModsSupplier());
+                    instance = local;
+                }
+            }
+        }
+        return local;
+    }
 
     /**
      * Creates a platform-independent manifest generator API instance.
@@ -278,6 +353,37 @@ public final class ManifestGenApi {
             throw new IllegalArgumentException(name + " must not be blank");
         }
         return normalized;
+    }
+
+    /**
+     * Clears the shared registration and instance for isolated unit tests.
+     */
+    static void resetForTests() {
+        synchronized (ManifestGenApi.class) {
+            registration = null;
+            instance = null;
+        }
+    }
+
+    /**
+     * Platform registration data used to lazily construct the shared API.
+     *
+     * @param gameDirectory server game directory
+     * @param loader stable loader id
+     * @param minecraftVersionSupplier current Minecraft version supplier
+     * @param installedModsSupplier installed mod list supplier
+     */
+    private record Registration(
+            Path gameDirectory,
+            String loader,
+            Supplier<String> minecraftVersionSupplier,
+            Supplier<List<InstalledMod>> installedModsSupplier) {
+        /**
+         * Returns whether this registration points at the same fixed context as an existing API.
+         */
+        boolean matches(ManifestGenApi api) {
+            return gameDirectory.equals(api.gameDirectory()) && loader.equals(api.loader());
+        }
     }
 
     /**

@@ -3,6 +3,7 @@ package io.github.henryxjh.mcclientupdate.server;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -16,12 +17,32 @@ import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ManifestGenApiTest {
 
     @TempDir
     Path gameDir;
+
+    @AfterEach
+    void resetSharedApi() {
+        ManifestGenApi.resetForTests();
+    }
+
+    @Test
+    void registerAndGetReturnSharedCommonApiInstance() {
+        ManifestGenApi.register(gameDir, "fabric", () -> "1.21.1", List::of);
+
+        assertTrue(ManifestGenApi.isRegistered());
+        ManifestGenApi first = ManifestGenApi.get();
+        ManifestGenApi second = ManifestGenApi.get();
+
+        assertSame(first, second);
+        assertEquals(gameDir, first.gameDirectory());
+        assertEquals("fabric", first.loader());
+        assertEquals("1.21.1", first.minecraftVersion());
+    }
 
     @Test
     void generateUsesSameWorkspaceGeneratorAndReturnsMessages() throws Exception {

@@ -30,9 +30,13 @@ import static net.minecraft.commands.Commands.literal;
 @Mod("mcu_manifest_gen")
 public final class NeoForgeManifestGen {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static volatile ManifestGenApi API;
 
     public NeoForgeManifestGen(IEventBus modEventBus) {
+        ManifestGenApi.register(
+                FMLPaths.GAMEDIR.get(),
+                "neoforge",
+                NeoForgeManifestGen::getMcVersion,
+                NeoForgeManifestGen::getInstalledMods);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         LOGGER.info("[MCUManifestGen] Loaded. Config: config/mcu-manifest-gen.json");
         LOGGER.info("[MCUManifestGen] Run /mcum-gen generate to create workspace.");
@@ -63,36 +67,12 @@ public final class NeoForgeManifestGen {
         dispatcher.register(root);
     }
 
-    /**
-     * Returns the shared NeoForge manifest generator API instance.
-     *
-     * <p>Commands and external server-management mods should use this method
-     * so all callers share the same API object for this loaded server.</p>
-     */
-    public static ManifestGenApi api() {
-        ManifestGenApi local = API;
-        if (local == null) {
-            synchronized (NeoForgeManifestGen.class) {
-                local = API;
-                if (local == null) {
-                    local = new ManifestGenApi(
-                            FMLPaths.GAMEDIR.get(),
-                            "neoforge",
-                            getMcVersion(),
-                            NeoForgeManifestGen::getInstalledMods);
-                    API = local;
-                }
-            }
-        }
-        return local;
-    }
-
     private boolean checkPermission(CommandSourceStack source) {
         if (source.getEntity() == null) {
             return true;
         }
         if (source.getPlayer() != null) {
-            return api().isUserAllowed(source.getPlayer().getGameProfile().getName());
+            return ManifestGenApi.get().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
     }
@@ -101,7 +81,7 @@ public final class NeoForgeManifestGen {
 
     private int executeGenerate(CommandContext<CommandSourceStack> ctx, String manifestId) {
         CommandSourceStack source = ctx.getSource();
-        api().generate(
+        ManifestGenApi.get().generate(
                 manifestId,
                 msg -> {
                     LOGGER.info("[MCUManifestGen] {}", msg);
@@ -114,7 +94,7 @@ public final class NeoForgeManifestGen {
 
     private int executeIgnoreAdd(CommandContext<CommandSourceStack> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenApi.IgnoreChangeResult result = api().addIgnoredMod(modId);
+        ManifestGenApi.IgnoreChangeResult result = ManifestGenApi.get().addIgnoredMod(modId);
         ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
@@ -123,7 +103,7 @@ public final class NeoForgeManifestGen {
 
     private int executeIgnoreRemove(CommandContext<CommandSourceStack> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenApi.IgnoreChangeResult result = api().removeIgnoredMod(modId);
+        ManifestGenApi.IgnoreChangeResult result = ManifestGenApi.get().removeIgnoredMod(modId);
         ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
@@ -131,7 +111,7 @@ public final class NeoForgeManifestGen {
     // ---- ignore list --------------------------------------------------
 
     private int executeIgnoreList(CommandContext<CommandSourceStack> ctx) {
-        ManifestGenApi.IgnoreListResult result = api().listIgnoredMods();
+        ManifestGenApi.IgnoreListResult result = ManifestGenApi.get().listIgnoredMods();
         ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
@@ -145,7 +125,7 @@ public final class NeoForgeManifestGen {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<CommandSourceStack> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            for (String id : api().suggestIgnoreAddModIds()) {
+            for (String id : ManifestGenApi.get().suggestIgnoreAddModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();
@@ -159,7 +139,7 @@ public final class NeoForgeManifestGen {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<CommandSourceStack> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            for (String id : api().suggestIgnoreRemoveModIds()) {
+            for (String id : ManifestGenApi.get().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();

@@ -29,7 +29,6 @@ import static net.minecraft.server.command.CommandManager.literal;
 public final class FabricManifestGen implements ModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String MOD_ID = "mcu_manifest_gen";
-    private static volatile ManifestGenApi API;
 
     @Override
     public void onInitialize() {
@@ -37,6 +36,11 @@ public final class FabricManifestGen implements ModInitializer {
             return;
         }
 
+        ManifestGenApi.register(
+                FabricLoader.getInstance().getGameDir(),
+                "fabric",
+                FabricManifestGen::getMcVersion,
+                FabricManifestGen::getInstalledMods);
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             registerCommands(dispatcher);
         });
@@ -67,36 +71,12 @@ public final class FabricManifestGen implements ModInitializer {
         dispatcher.register(root);
     }
 
-    /**
-     * Returns the shared Fabric manifest generator API instance.
-     *
-     * <p>Commands and external server-management mods should use this method
-     * so all callers share the same API object for this loaded server.</p>
-     */
-    public static ManifestGenApi api() {
-        ManifestGenApi local = API;
-        if (local == null) {
-            synchronized (FabricManifestGen.class) {
-                local = API;
-                if (local == null) {
-                    local = new ManifestGenApi(
-                            FabricLoader.getInstance().getGameDir(),
-                            "fabric",
-                            getMcVersion(),
-                            FabricManifestGen::getInstalledMods);
-                    API = local;
-                }
-            }
-        }
-        return local;
-    }
-
     private boolean checkPermission(ServerCommandSource source) {
         if (source.getEntity() == null) {
             return true; // console
         }
         if (source.getPlayer() != null) {
-            return api().isUserAllowed(source.getPlayer().getGameProfile().getName());
+            return ManifestGenApi.get().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
     }
@@ -105,7 +85,7 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeGenerate(CommandContext<ServerCommandSource> ctx, String manifestId) {
         ServerCommandSource source = ctx.getSource();
-        api().generate(
+        ManifestGenApi.get().generate(
                 manifestId,
                 msg -> {
                     LOGGER.info("[MCUManifestGen] {}", msg);
@@ -118,7 +98,7 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeIgnoreAdd(CommandContext<ServerCommandSource> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenApi.IgnoreChangeResult result = api().addIgnoredMod(modId);
+        ManifestGenApi.IgnoreChangeResult result = ManifestGenApi.get().addIgnoredMod(modId);
         ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
@@ -127,7 +107,7 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeIgnoreRemove(CommandContext<ServerCommandSource> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenApi.IgnoreChangeResult result = api().removeIgnoredMod(modId);
+        ManifestGenApi.IgnoreChangeResult result = ManifestGenApi.get().removeIgnoredMod(modId);
         ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
@@ -135,7 +115,7 @@ public final class FabricManifestGen implements ModInitializer {
     // ---- ignore list --------------------------------------------------
 
     private int executeIgnoreList(CommandContext<ServerCommandSource> ctx) {
-        ManifestGenApi.IgnoreListResult result = api().listIgnoredMods();
+        ManifestGenApi.IgnoreListResult result = ManifestGenApi.get().listIgnoredMods();
         ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
@@ -149,7 +129,7 @@ public final class FabricManifestGen implements ModInitializer {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<ServerCommandSource> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            for (String id : api().suggestIgnoreAddModIds()) {
+            for (String id : ManifestGenApi.get().suggestIgnoreAddModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();
@@ -163,7 +143,7 @@ public final class FabricManifestGen implements ModInitializer {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<ServerCommandSource> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            for (String id : api().suggestIgnoreRemoveModIds()) {
+            for (String id : ManifestGenApi.get().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();
