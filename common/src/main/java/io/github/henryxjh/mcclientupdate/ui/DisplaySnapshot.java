@@ -6,7 +6,7 @@ import java.util.List;
 /**
  * Immutable snapshot of the current progress display state.
  * Updated by {@link UpdateProgressDisplay} via volatile write,
- * read by the render thread in {@link McUpdateOverlay}.
+ * read by platform-specific render integrations.
  */
 public final class DisplaySnapshot {
 
