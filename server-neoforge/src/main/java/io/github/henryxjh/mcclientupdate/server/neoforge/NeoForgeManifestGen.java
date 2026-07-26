@@ -30,6 +30,7 @@ import static net.minecraft.commands.Commands.literal;
 @Mod("mcu_manifest_gen")
 public final class NeoForgeManifestGen {
     private static final Logger LOGGER = LogUtils.getLogger();
+    private static volatile ManifestGenApi API;
 
     public NeoForgeManifestGen(IEventBus modEventBus) {
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
@@ -62,12 +63,28 @@ public final class NeoForgeManifestGen {
         dispatcher.register(root);
     }
 
+    /**
+     * Returns the shared NeoForge manifest generator API instance.
+     *
+     * <p>Commands and external server-management mods should use this method
+     * so all callers share the same API object for this loaded server.</p>
+     */
     public static ManifestGenApi api() {
-        return new ManifestGenApi(
-                FMLPaths.GAMEDIR.get(),
-                "neoforge",
-                getMcVersion(),
-                NeoForgeManifestGen::getInstalledMods);
+        ManifestGenApi local = API;
+        if (local == null) {
+            synchronized (NeoForgeManifestGen.class) {
+                local = API;
+                if (local == null) {
+                    local = new ManifestGenApi(
+                            FMLPaths.GAMEDIR.get(),
+                            "neoforge",
+                            getMcVersion(),
+                            NeoForgeManifestGen::getInstalledMods);
+                    API = local;
+                }
+            }
+        }
+        return local;
     }
 
     private boolean checkPermission(CommandSourceStack source) {

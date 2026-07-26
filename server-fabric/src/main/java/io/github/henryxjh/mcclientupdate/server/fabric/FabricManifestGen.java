@@ -29,6 +29,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 public final class FabricManifestGen implements ModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String MOD_ID = "mcu_manifest_gen";
+    private static volatile ManifestGenApi API;
 
     @Override
     public void onInitialize() {
@@ -66,12 +67,28 @@ public final class FabricManifestGen implements ModInitializer {
         dispatcher.register(root);
     }
 
+    /**
+     * Returns the shared Fabric manifest generator API instance.
+     *
+     * <p>Commands and external server-management mods should use this method
+     * so all callers share the same API object for this loaded server.</p>
+     */
     public static ManifestGenApi api() {
-        return new ManifestGenApi(
-                FabricLoader.getInstance().getGameDir(),
-                "fabric",
-                getMcVersion(),
-                FabricManifestGen::getInstalledMods);
+        ManifestGenApi local = API;
+        if (local == null) {
+            synchronized (FabricManifestGen.class) {
+                local = API;
+                if (local == null) {
+                    local = new ManifestGenApi(
+                            FabricLoader.getInstance().getGameDir(),
+                            "fabric",
+                            getMcVersion(),
+                            FabricManifestGen::getInstalledMods);
+                    API = local;
+                }
+            }
+        }
+        return local;
     }
 
     private boolean checkPermission(ServerCommandSource source) {
