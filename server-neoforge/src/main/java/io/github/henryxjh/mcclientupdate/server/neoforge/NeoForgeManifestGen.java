@@ -7,8 +7,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.logging.LogUtils;
 
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
-import io.github.henryxjh.mcclientupdate.server.ManifestGenConfig;
-import io.github.henryxjh.mcclientupdate.server.WorkspaceGenerator;
+import io.github.henryxjh.mcclientupdate.server.ManifestGenApi;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
@@ -24,7 +23,6 @@ import org.slf4j.Logger;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -64,13 +62,20 @@ public final class NeoForgeManifestGen {
         dispatcher.register(root);
     }
 
+    public static ManifestGenApi api() {
+        return new ManifestGenApi(
+                FMLPaths.GAMEDIR.get(),
+                "neoforge",
+                getMcVersion(),
+                NeoForgeManifestGen::getInstalledMods);
+    }
+
     private boolean checkPermission(CommandSourceStack source) {
         if (source.getEntity() == null) {
             return true;
         }
-        ManifestGenConfig config = loadConfig();
         if (source.getPlayer() != null) {
-            return config.isUserAllowed(source.getPlayer().getGameProfile().getName());
+            return api().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
     }
@@ -79,30 +84,12 @@ public final class NeoForgeManifestGen {
 
     private int executeGenerate(CommandContext<CommandSourceStack> ctx, String manifestId) {
         CommandSourceStack source = ctx.getSource();
-        ManifestGenConfig config = loadConfig();
-        Path gameDir = FMLPaths.GAMEDIR.get();
-
-        List<InstalledMod> installedMods = getInstalledMods();
-        String loader = "neoforge";
-        String mcVersion = getMcVersion();
-
-        source.sendSuccess(() -> Component.literal("Scanning " + installedMods.size() + " loaded mods..."), false);
-
-        WorkspaceGenerator.Result result = WorkspaceGenerator.generate(
-                gameDir, installedMods, loader, mcVersion, config, manifestId,
+        api().generate(
+                manifestId,
                 msg -> {
                     LOGGER.info("[MCUManifestGen] {}", msg);
                     source.sendSuccess(() -> Component.literal(msg), false);
                 });
-
-        source.sendSuccess(() -> Component.literal("Manifest ID: " + result.manifestId()), false);
-        source.sendSuccess(() -> Component.literal("Wrote " + result.scanned() + " mods (" +
-                result.updated() + " updated, " + result.added() + " added, " +
-                result.markedDelete() + " marked DELETE) to " + result.outputFileName()), false);
-        source.sendSuccess(() -> Component.literal("Skipped: " + result.skippedNonModFolder() +
-                " non-mod-folder, " + result.skippedIgnored() + " ignored, " +
-                result.skippedDuplicateJar() + " duplicate JAR"), false);
-
         return 1;
     }
 
@@ -110,15 +97,8 @@ public final class NeoForgeManifestGen {
 
     private int executeIgnoreAdd(CommandContext<CommandSourceStack> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenConfig config = loadConfig();
-        if (config.addIgnored(modId)) {
-            config.save(FMLPaths.GAMEDIR.get());
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("Added \"" + modId + "\" to ignored mods."), false);
-        } else {
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("\"" + modId + "\" is already ignored."), false);
-        }
+        ManifestGenApi.IgnoreChangeResult result = api().addIgnoredMod(modId);
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
 
@@ -126,31 +106,16 @@ public final class NeoForgeManifestGen {
 
     private int executeIgnoreRemove(CommandContext<CommandSourceStack> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenConfig config = loadConfig();
-        if (config.removeIgnored(modId)) {
-            config.save(FMLPaths.GAMEDIR.get());
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("Removed \"" + modId + "\" from ignored mods."), false);
-        } else {
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("\"" + modId + "\" is not in ignored list."), false);
-        }
+        ManifestGenApi.IgnoreChangeResult result = api().removeIgnoredMod(modId);
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
 
     // ---- ignore list --------------------------------------------------
 
     private int executeIgnoreList(CommandContext<CommandSourceStack> ctx) {
-        ManifestGenConfig config = loadConfig();
-        List<String> ignored = config.getIgnoredMods();
-        if (ignored.isEmpty()) {
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("No mods are ignored."), false);
-        } else {
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("Ignored mods (" + ignored.size() + "): "
-                            + String.join(", ", ignored)), false);
-        }
+        ManifestGenApi.IgnoreListResult result = api().listIgnoredMods();
+        ctx.getSource().sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
 
@@ -163,26 +128,8 @@ public final class NeoForgeManifestGen {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<CommandSourceStack> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            ManifestGenConfig config = ManifestGenConfig.load(FMLPaths.GAMEDIR.get());
-            Set<String> ignored = Set.copyOf(config.getIgnoredMods());
-            Path modsDir = FMLPaths.GAMEDIR.get().resolve("mods");
-            Path realModsDir;
-            try {
-                realModsDir = modsDir.toRealPath();
-            } catch (Exception e) {
-                return builder.buildFuture();
-            }
-
-            for (InstalledMod mod : getInstalledMods()) {
-                String id = mod.modId();
-                if (ignored.contains(id)) continue;
-                try {
-                    Path realPath = mod.file().toAbsolutePath().normalize().toRealPath();
-                    if (realPath.startsWith(realModsDir)) {
-                        builder.suggest(id);
-                    }
-                } catch (Exception ignored2) {
-                }
+            for (String id : api().suggestIgnoreAddModIds()) {
+                builder.suggest(id);
             }
             return builder.buildFuture();
         }
@@ -195,8 +142,7 @@ public final class NeoForgeManifestGen {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<CommandSourceStack> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            ManifestGenConfig config = ManifestGenConfig.load(FMLPaths.GAMEDIR.get());
-            for (String id : config.getIgnoredMods()) {
+            for (String id : api().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();
@@ -204,10 +150,6 @@ public final class NeoForgeManifestGen {
     }
 
     // ---- Helpers ------------------------------------------------------
-
-    private static ManifestGenConfig loadConfig() {
-        return ManifestGenConfig.load(FMLPaths.GAMEDIR.get());
-    }
 
     private static List<InstalledMod> getInstalledMods() {
         List<InstalledMod> result = new ArrayList<>();

@@ -7,8 +7,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.logging.LogUtils;
 
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
-import io.github.henryxjh.mcclientupdate.server.ManifestGenConfig;
-import io.github.henryxjh.mcclientupdate.server.WorkspaceGenerator;
+import io.github.henryxjh.mcclientupdate.server.ManifestGenApi;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
@@ -24,7 +23,6 @@ import org.slf4j.Logger;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
@@ -68,13 +66,20 @@ public final class FabricManifestGen implements ModInitializer {
         dispatcher.register(root);
     }
 
+    public static ManifestGenApi api() {
+        return new ManifestGenApi(
+                FabricLoader.getInstance().getGameDir(),
+                "fabric",
+                getMcVersion(),
+                FabricManifestGen::getInstalledMods);
+    }
+
     private boolean checkPermission(ServerCommandSource source) {
         if (source.getEntity() == null) {
             return true; // console
         }
-        ManifestGenConfig config = loadConfig();
         if (source.getPlayer() != null) {
-            return config.isUserAllowed(source.getPlayer().getGameProfile().getName());
+            return api().isUserAllowed(source.getPlayer().getGameProfile().getName());
         }
         return false;
     }
@@ -83,30 +88,12 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeGenerate(CommandContext<ServerCommandSource> ctx, String manifestId) {
         ServerCommandSource source = ctx.getSource();
-        ManifestGenConfig config = loadConfig();
-        Path gameDir = FabricLoader.getInstance().getGameDir();
-
-        List<InstalledMod> installedMods = getInstalledMods();
-        String loader = "fabric";
-        String mcVersion = getMcVersion();
-
-        source.sendFeedback(() -> Text.literal("Scanning " + installedMods.size() + " loaded mods..."), false);
-
-        WorkspaceGenerator.Result result = WorkspaceGenerator.generate(
-                gameDir, installedMods, loader, mcVersion, config, manifestId,
+        api().generate(
+                manifestId,
                 msg -> {
                     LOGGER.info("[MCUManifestGen] {}", msg);
                     source.sendFeedback(() -> Text.literal(msg), false);
                 });
-
-        source.sendFeedback(() -> Text.literal("Manifest ID: " + result.manifestId()), false);
-        source.sendFeedback(() -> Text.literal("Wrote " + result.scanned() + " mods (" +
-                result.updated() + " updated, " + result.added() + " added, " +
-                result.markedDelete() + " marked DELETE) to " + result.outputFileName()), false);
-        source.sendFeedback(() -> Text.literal("Skipped: " + result.skippedNonModFolder() +
-                " non-mod-folder, " + result.skippedIgnored() + " ignored, " +
-                result.skippedDuplicateJar() + " duplicate JAR"), false);
-
         return 1;
     }
 
@@ -114,15 +101,8 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeIgnoreAdd(CommandContext<ServerCommandSource> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenConfig config = loadConfig();
-        if (config.addIgnored(modId)) {
-            config.save(FabricLoader.getInstance().getGameDir());
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("Added \"" + modId + "\" to ignored mods."), false);
-        } else {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("\"" + modId + "\" is already ignored."), false);
-        }
+        ManifestGenApi.IgnoreChangeResult result = api().addIgnoredMod(modId);
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
 
@@ -130,31 +110,16 @@ public final class FabricManifestGen implements ModInitializer {
 
     private int executeIgnoreRemove(CommandContext<ServerCommandSource> ctx) {
         String modId = StringArgumentType.getString(ctx, "modId");
-        ManifestGenConfig config = loadConfig();
-        if (config.removeIgnored(modId)) {
-            config.save(FabricLoader.getInstance().getGameDir());
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("Removed \"" + modId + "\" from ignored mods."), false);
-        } else {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("\"" + modId + "\" is not in ignored list."), false);
-        }
+        ManifestGenApi.IgnoreChangeResult result = api().removeIgnoredMod(modId);
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
 
     // ---- ignore list --------------------------------------------------
 
     private int executeIgnoreList(CommandContext<ServerCommandSource> ctx) {
-        ManifestGenConfig config = loadConfig();
-        List<String> ignored = config.getIgnoredMods();
-        if (ignored.isEmpty()) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("No mods are ignored."), false);
-        } else {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("Ignored mods (" + ignored.size() + "): "
-                            + String.join(", ", ignored)), false);
-        }
+        ManifestGenApi.IgnoreListResult result = api().listIgnoredMods();
+        ctx.getSource().sendFeedback(() -> Text.literal(result.message()), false);
         return 1;
     }
 
@@ -167,26 +132,8 @@ public final class FabricManifestGen implements ModInitializer {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<ServerCommandSource> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            ManifestGenConfig config = ManifestGenConfig.load(FabricLoader.getInstance().getGameDir());
-            Set<String> ignored = Set.copyOf(config.getIgnoredMods());
-            Path modsDir = FabricLoader.getInstance().getGameDir().resolve("mods");
-            Path realModsDir;
-            try {
-                realModsDir = modsDir.toRealPath();
-            } catch (Exception e) {
-                return builder.buildFuture();
-            }
-
-            for (InstalledMod mod : getInstalledMods()) {
-                String id = mod.modId();
-                if (ignored.contains(id)) continue;
-                try {
-                    Path realPath = mod.file().toAbsolutePath().normalize().toRealPath();
-                    if (realPath.startsWith(realModsDir)) {
-                        builder.suggest(id);
-                    }
-                } catch (Exception ignored2) {
-                }
+            for (String id : api().suggestIgnoreAddModIds()) {
+                builder.suggest(id);
             }
             return builder.buildFuture();
         }
@@ -199,8 +146,7 @@ public final class FabricManifestGen implements ModInitializer {
         public java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> getSuggestions(
                 CommandContext<ServerCommandSource> ctx,
                 com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
-            ManifestGenConfig config = ManifestGenConfig.load(FabricLoader.getInstance().getGameDir());
-            for (String id : config.getIgnoredMods()) {
+            for (String id : api().suggestIgnoreRemoveModIds()) {
                 builder.suggest(id);
             }
             return builder.buildFuture();
@@ -208,10 +154,6 @@ public final class FabricManifestGen implements ModInitializer {
     }
 
     // ---- Helpers ------------------------------------------------------
-
-    private ManifestGenConfig loadConfig() {
-        return ManifestGenConfig.load(FabricLoader.getInstance().getGameDir());
-    }
 
     private static List<InstalledMod> getInstalledMods() {
         FabricLoader loader = FabricLoader.getInstance();
