@@ -156,10 +156,10 @@ public final class ManifestGenApi {
     /**
      * Returns the workspace parsing and query API.
      *
-     * <p>This API exposes a typed, read-only view of
-     * {@code manifest-workspace.json}. Workspace editing is intentionally not
-     * exposed here yet, so unknown fields written by the Python generator are
-     * not lost through a Java-side save operation.</p>
+     * <p>This API exposes typed workspace read methods and editor-based write
+     * methods for {@code manifest-workspace.json}. Write operations preserve
+     * unknown fields written by the Python generator unless the edited object
+     * is explicitly replaced.</p>
      */
     public ManifestWorkspaceApi workspace() {
         return workspaceApi;
