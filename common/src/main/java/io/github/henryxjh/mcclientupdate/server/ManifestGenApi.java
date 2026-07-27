@@ -1,6 +1,7 @@
 package io.github.henryxjh.mcclientupdate.server;
 
 import io.github.henryxjh.mcclientupdate.scan.InstalledMod;
+import io.github.henryxjh.mcclientupdate.server.workspace.ManifestWorkspaceApi;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ public final class ManifestGenApi {
     private final String loader;
     private final String minecraftVersion;
     private final Supplier<List<InstalledMod>> installedModsSupplier;
+    private final ManifestWorkspaceApi workspaceApi;
 
     /**
      * Registers the platform-specific context used by {@link #get()}.
@@ -118,6 +120,7 @@ public final class ManifestGenApi {
         this.loader = requireNonBlank(loader, "loader");
         this.minecraftVersion = requireNonBlank(minecraftVersion, "minecraftVersion");
         this.installedModsSupplier = Objects.requireNonNull(installedModsSupplier, "installedModsSupplier");
+        this.workspaceApi = new ManifestWorkspaceApi(this.gameDirectory, this::loadConfig);
     }
 
     /**
@@ -148,6 +151,18 @@ public final class ManifestGenApi {
      */
     public ManifestGenConfig loadConfig() {
         return ManifestGenConfig.load(gameDirectory);
+    }
+
+    /**
+     * Returns the workspace parsing and query API.
+     *
+     * <p>This API exposes a typed, read-only view of
+     * {@code manifest-workspace.json}. Workspace editing is intentionally not
+     * exposed here yet, so unknown fields written by the Python generator are
+     * not lost through a Java-side save operation.</p>
+     */
+    public ManifestWorkspaceApi workspace() {
+        return workspaceApi;
     }
 
     /**
