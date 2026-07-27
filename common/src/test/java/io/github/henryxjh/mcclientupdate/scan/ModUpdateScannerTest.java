@@ -63,6 +63,10 @@ class ModUpdateScannerTest {
         return new Variant(selector, priority, artifact);
     }
 
+    private Variant requiredVariant(int priority, Selector selector, Artifact artifact) {
+        return new Variant(selector, true, priority, artifact);
+    }
+
     private Mod manifestMod(String name, boolean required, List<Variant> variants) {
         return new Mod(name, required, Optional.empty(), Optional.empty(), variants);
     }
@@ -162,6 +166,39 @@ class ModUpdateScannerTest {
         Path modsDir = modsDir();
         Artifact art = artifact("1.0", 10, Optional.of("a".repeat(64)), Optional.empty());
         Variant var = variant(0, new Selector(Optional.empty(), Optional.empty(), Optional.empty()), art);
+        Mod mod = manifestMod("mymod", false, List.of(var));
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
+        assertTrue(result.candidates().isEmpty());
+    }
+
+    @Test
+    void optionalModWithRequiredMatchingVariantGeneratesCandidate() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10, Optional.of("a".repeat(64)), Optional.empty());
+        Selector selector = new Selector(
+                Optional.of(List.of("fabric")),
+                Optional.of(List.of("linux")),
+                Optional.empty());
+        Variant var = requiredVariant(0, selector, art);
+        Mod mod = manifestMod("mymod", false, List.of(var));
+        Manifest manifest = makeManifest(Map.of("mymod", mod));
+
+        ScanResult result = ModUpdateScanner.scan(manifest, defaultTarget(), modsDir, List.of());
+        assertEquals(1, result.candidates().size());
+        assertEquals(UpdateCandidate.Reason.MISSING_REQUIRED, result.candidates().get(0).reason());
+    }
+
+    @Test
+    void optionalModWithRequiredMismatchedVariantIsSkipped() throws Exception {
+        Path modsDir = modsDir();
+        Artifact art = artifact("1.0", 10, Optional.of("a".repeat(64)), Optional.empty());
+        Selector selector = new Selector(
+                Optional.of(List.of("fabric")),
+                Optional.of(List.of("android")),
+                Optional.empty());
+        Variant var = requiredVariant(0, selector, art);
         Mod mod = manifestMod("mymod", false, List.of(var));
         Manifest manifest = makeManifest(Map.of("mymod", mod));
 

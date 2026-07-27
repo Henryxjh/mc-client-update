@@ -55,6 +55,11 @@ def _validate_semantic(manifest: Dict[str, Any]) -> None:
                 raise ValueError(
                     f"mod '{modid}' variant {i} missing 'selector'"
                 )
+            variant_required = var.get("required")
+            if variant_required is not None and not isinstance(variant_required, bool):
+                raise ValueError(
+                    f"mod '{modid}' variant {i} has invalid 'required'"
+                )
             # Delete variants may omit artifact completely
             if var.get("action") == "delete":
                 continue

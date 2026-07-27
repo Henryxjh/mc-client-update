@@ -125,6 +125,9 @@ def add_or_update_variant(
         if no_overwrite:
             return "conflict"
         if force:
+            existing = mod_entry["variants"][existing_idx]
+            if "required" in existing and "required" not in variant:
+                variant["required"] = existing["required"]
             mod_entry["variants"][existing_idx] = variant
             return "updated"
         return "conflict"
@@ -209,6 +212,12 @@ def build_manifest(
 
         built_variants = []
         for idx, var_data in enumerate(mod_data.get("variants", [])):
+            variant_required = var_data.get("required")
+            if variant_required is not None and not isinstance(variant_required, bool):
+                raise ValueError(
+                    f"required for mod '{modid}' variant {idx} must be a boolean"
+                )
+
             # ---------- variant action ----------
             variant_action = var_data.get("action", "install")
             if variant_action == "delete":
@@ -218,6 +227,8 @@ def build_manifest(
                     "priority": var_data.get("priority", 0),
                     "action": "delete",
                 }
+                if variant_required is not None:
+                    variant_entry["required"] = variant_required
                 built_variants.append(variant_entry)
                 # Do NOT fire progress callback for delete variants
                 continue
@@ -402,6 +413,8 @@ def build_manifest(
                 "priority": var_data.get("priority", 0),
                 "artifact": artifact,
             }
+            if variant_required is not None:
+                variant_entry["required"] = variant_required
             built_variants.append(variant_entry)
 
             if progress_callback is not None:

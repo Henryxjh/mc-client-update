@@ -107,6 +107,10 @@
         "selector": {
           "$ref": "#/$defs/selector"
         },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
         "priority": {
           "type": "integer",
           "default": 0

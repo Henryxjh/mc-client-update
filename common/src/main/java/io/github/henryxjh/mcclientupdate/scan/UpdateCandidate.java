@@ -31,7 +31,7 @@ public record UpdateCandidate(
             case MISSING_REQUIRED:
                 Objects.requireNonNull(selectedVariant,
                         "selectedVariant must not be null for MISSING_REQUIRED");
-                if (!manifestMod.required() || installed.isPresent()) {
+                if ((!manifestMod.required() && !selectedVariant.required()) || installed.isPresent()) {
                     throw new ModScanException(
                             "MISSING_REQUIRED candidate must be required and have no installed mod");
                 }

@@ -5,12 +5,21 @@ package io.github.henryxjh.mcclientupdate.manifest;
  */
 public record Variant(
         Selector selector,
+        boolean required,
         int priority,
         Artifact artifact,
         ModAction action) {
 
     public Variant(Selector selector, int priority, Artifact artifact) {
-        this(selector, priority, artifact, ModAction.INSTALL);
+        this(selector, false, priority, artifact, ModAction.INSTALL);
+    }
+
+    public Variant(Selector selector, boolean required, int priority, Artifact artifact) {
+        this(selector, required, priority, artifact, ModAction.INSTALL);
+    }
+
+    public Variant(Selector selector, int priority, Artifact artifact, ModAction action) {
+        this(selector, false, priority, artifact, action);
     }
 
     public Variant {

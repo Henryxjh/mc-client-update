@@ -319,7 +319,8 @@ public final class ClientUpdateManifestFetcher {
             }
         }
 
-        return new Variant(selector, variantJson.priority, artifact, variantAction);
+        return new Variant(selector, Boolean.TRUE.equals(variantJson.required),
+                variantJson.priority, artifact, variantAction);
     }
 
     private static Optional<List<String>> validateSelectorList(List<String> raw, String fieldName, Set<String> allowed) {
@@ -545,6 +546,7 @@ public final class ClientUpdateManifestFetcher {
 
     private static final class VariantJson {
         SelectorJson selector;
+        Boolean required;
         int priority;
         ArtifactJson artifact;
         String action; // "install" / "delete", optional

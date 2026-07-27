@@ -231,6 +231,7 @@ public final class ManifestWorkspaceApi {
             JsonObject variant = element.getAsJsonObject();
             variants.add(new WorkspaceVariant(
                     parseSelector(objectOrNull(variant, "selector")),
+                    booleanOrNull(variant, "required"),
                     stringOrDefault(variant, "action", "install"),
                     intOrDefault(variant, "priority", 0),
                     stringOrNull(variant, "version"),
@@ -297,6 +298,18 @@ public final class ManifestWorkspaceApi {
             return value.getAsBoolean();
         } catch (RuntimeException e) {
             return fallback;
+        }
+    }
+
+    private static Boolean booleanOrNull(JsonObject json, String key) {
+        JsonElement value = json.get(key);
+        if (value == null || value.isJsonNull()) {
+            return null;
+        }
+        try {
+            return value.getAsBoolean();
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 
@@ -431,6 +444,9 @@ public final class ManifestWorkspaceApi {
         Objects.requireNonNull(variant, "variant");
         JsonObject json = new JsonObject();
         json.add("selector", selectorToJson(variant.selector()));
+        if (variant.required() != null) {
+            json.addProperty("required", variant.required());
+        }
         setStringOrRemove(json, "action", variant.action() != null ? variant.action() : "install");
         if (variant.priority() != 0) {
             json.addProperty("priority", variant.priority());
@@ -739,6 +755,14 @@ public final class ManifestWorkspaceApi {
         }
 
         /**
+         * Sets selector-specific required state on the variant matched by selector.
+         */
+        public WorkspaceModEditor setVariantRequired(WorkspaceSelector selector, boolean required) {
+            variant(selector).setRequired(required);
+            return this;
+        }
+
+        /**
          * Removes variants with a matching selector.
          */
         public WorkspaceModEditor removeVariant(WorkspaceSelector selector) {
@@ -778,6 +802,22 @@ public final class ManifestWorkspaceApi {
 
         private WorkspaceVariantEditor(JsonObject variant) {
             this.variant = variant;
+        }
+
+        /**
+         * Sets selector-specific required state.
+         */
+        public WorkspaceVariantEditor setRequired(boolean required) {
+            variant.addProperty("required", required);
+            return this;
+        }
+
+        /**
+         * Clears selector-specific required state, falling back to mod-level required.
+         */
+        public WorkspaceVariantEditor clearRequired() {
+            variant.remove("required");
+            return this;
         }
 
         /**
@@ -868,6 +908,7 @@ public final class ManifestWorkspaceApi {
      * Typed view of one workspace variant.
      *
      * @param selector platform selector for this variant
+     * @param required selector-specific required state, or {@code null} when absent
      * @param action variant-level action, defaulting to {@code install}
      * @param priority selector conflict priority, defaulting to {@code 0}
      * @param version mod version string
@@ -879,6 +920,7 @@ public final class ManifestWorkspaceApi {
      */
     public record WorkspaceVariant(
             WorkspaceSelector selector,
+            Boolean required,
             String action,
             int priority,
             String version,

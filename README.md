@@ -91,6 +91,8 @@ Android 检测不只依赖 `os.name`。它还会检查 `os.version`、Java VM/�
 时将在启动时移除已安装的 Mod（此时 `variants` 可以省略或为空数组）。变体的 `selector`
 未填写某个维度时表示该维度不受限制；匹配多个变体时选择 `priority` 最大的一个，最高
 优先级并列应视为无效清单，而不是依赖数组顺序猜测。
+顶层 `required=false` 的 Mod 默认在未安装时跳过；如果某个匹配到的变体设置
+`required=true`，则仅该 selector 命中的平台会在未安装时强制安装。
 
 可选的顶层字段 `minimumLoaderVersions` 指定此清单要求的最低加载器版本。它是一个对象，
 必须恰好包含一个键，键为加载器 ID（允许 `fabric`、`neoforge`、`forge`），

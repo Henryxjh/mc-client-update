@@ -62,6 +62,7 @@ class ManifestWorkspaceApiTest {
                             "operatingSystems": ["linux"],
                             "architectures": ["x86_64", "loongarch64"]
                           },
+                          "required": true,
                           "action": "install",
                           "priority": 3,
                           "version": "6.0.1",
@@ -110,6 +111,7 @@ class ManifestWorkspaceApiTest {
         assertEquals("6.0.0", create.skipIfInstalledVersionGreaterThan());
 
         ManifestWorkspaceApi.WorkspaceVariant variant = create.variants().get(0);
+        assertEquals(Boolean.TRUE, variant.required());
         assertEquals("install", variant.action());
         assertEquals(3, variant.priority());
         assertEquals("6.0.1", variant.version());
@@ -154,6 +156,7 @@ class ManifestWorkspaceApiTest {
                                     List.of("fabric"),
                                     List.of("linux"),
                                     List.of("x86_64")),
+                            Boolean.TRUE,
                             "install",
                             5,
                             "1.0.0",
@@ -180,6 +183,7 @@ class ManifestWorkspaceApiTest {
         ManifestWorkspaceApi.WorkspaceMod privateMod = workspace.mods().get("private_mod");
         assertEquals("", privateMod.license());
         ManifestWorkspaceApi.WorkspaceVariant variant = privateMod.variants().get(0);
+        assertEquals(Boolean.TRUE, variant.required());
         assertEquals("private_mod.jar", variant.fileName());
         assertEquals("direct", variant.download().type());
         assertEquals(Map.of("sha512", "abc"), variant.hashes());
@@ -232,6 +236,7 @@ class ManifestWorkspaceApiTest {
                     .setLicense("")
                     .addOrReplaceVariant(new ManifestWorkspaceApi.WorkspaceVariant(
                             fabricSelector,
+                            null,
                             "install",
                             0,
                             "2.0.0",
@@ -294,6 +299,7 @@ class ManifestWorkspaceApiTest {
 
         api.workspace().edit(editor -> editor.mod("create")
                 .variant(fabricSelector)
+                .setRequired(true)
                 .setLocalFile("/new/create.jar")
                 .setDownloadUrl("https://new.example.test/create.jar"));
 
@@ -302,6 +308,7 @@ class ManifestWorkspaceApiTest {
                 .orElseThrow()
                 .variants()
                 .get(0);
+        assertEquals(Boolean.TRUE, parsed.required());
         assertEquals("/new/create.jar", parsed.localFile());
         assertEquals("https://new.example.test/create.jar", parsed.download().url());
 
@@ -314,6 +321,18 @@ class ManifestWorkspaceApiTest {
                 .getAsJsonObject();
         assertEquals("keep-me", rawVariant.get("unknownVariant").getAsString());
         assertEquals("keep-me", rawVariant.getAsJsonObject("download").get("unknownDownload").getAsString());
+        assertTrue(rawVariant.get("required").getAsBoolean());
+
+        api.workspace().edit(editor -> editor.mod("create")
+                .variant(fabricSelector)
+                .clearRequired());
+
+        ManifestWorkspaceApi.WorkspaceVariant cleared = api.workspace()
+                .findMod("create")
+                .orElseThrow()
+                .variants()
+                .get(0);
+        assertNull(cleared.required());
     }
 
     @Test
@@ -326,6 +345,7 @@ class ManifestWorkspaceApiTest {
 
         ManifestWorkspaceApi.WorkspaceWriteResult written = api.workspace().edit(editor -> editor.mod("sable")
                 .variant(androidSelector)
+                .setRequired(true)
                 .setLocalFile("/srv/mods/sable-android.jar")
                 .setDownloadType("direct")
                 .setDownloadUrl("https://cdn.example.test/sable-android.jar"));
@@ -336,6 +356,7 @@ class ManifestWorkspaceApiTest {
                 .variants()
                 .get(0);
         assertEquals(List.of("neoforge"), variant.selector().loaders());
+        assertEquals(Boolean.TRUE, variant.required());
         assertEquals(List.of("android"), variant.selector().operatingSystems());
         assertEquals(List.of("aarch64"), variant.selector().architectures());
         assertEquals("/srv/mods/sable-android.jar", variant.localFile());

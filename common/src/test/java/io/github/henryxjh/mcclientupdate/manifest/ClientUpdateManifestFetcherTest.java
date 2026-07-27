@@ -538,6 +538,7 @@ class ClientUpdateManifestFetcherTest {
                         },
                         {
                           "selector": { "architectures": ["x86_64"] },
+                          "required": true,
                           "priority": 5,
                           "artifact": {
                             "version": "2.0.0",
@@ -598,6 +599,7 @@ class ClientUpdateManifestFetcherTest {
         assertEquals(Optional.of("modrinth"), direct.provider());
         assertEquals(Optional.of("12345"), direct.projectId());
         assertEquals(Optional.of("1.2"), direct.versionId());
+        assertTrue(directVariant.required());
         assertEquals(5, directVariant.priority());
 
         Variant manualVariant = mod.variants().stream()

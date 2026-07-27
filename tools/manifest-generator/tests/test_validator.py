@@ -44,7 +44,15 @@ def make_valid_manifest():
 
 def test_valid_manifest_passes_semantic():
     manifest = make_valid_manifest()
+    manifest["mods"]["moda"]["variants"][0]["required"] = True
     validate_manifest(manifest)  # no exception
+
+
+def test_variant_invalid_required_fails():
+    manifest = make_valid_manifest()
+    manifest["mods"]["moda"]["variants"][0]["required"] = "yes"
+    with pytest.raises(ValueError, match="invalid 'required'"):
+        validate_manifest(manifest)
 
 
 def test_missing_required_field_fails_semantic():

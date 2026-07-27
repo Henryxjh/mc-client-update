@@ -74,6 +74,7 @@ workspace 可以使用更便于编辑的内部字段，例如：
 - `localFile`
 - `allowRedistribution`
 - `selector`
+- variant 级 `required`
 - `license`
 - `source`
 

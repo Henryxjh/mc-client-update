@@ -227,7 +227,7 @@ public final class ModUpdateScanner {
                 // hash matches === already up-to-date, no candidate
             } else {
                 // not installed
-                if (mod.required()) {
+                if (mod.required() || selected.required()) {
                     candidates.add(new UpdateCandidate(
                             modId, mod, selected, Optional.empty(),
                             UpdateCandidate.Reason.MISSING_REQUIRED));

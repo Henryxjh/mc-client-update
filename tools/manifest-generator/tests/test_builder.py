@@ -85,6 +85,25 @@ def test_force_updates_existing_variant(ws):
     os.unlink(tf1.name); os.unlink(tf2.name)
 
 
+def test_force_update_preserves_existing_variant_required(ws):
+    with tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf1, \
+         tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf2:
+        tf1.write(b"old")
+        tf2.write(b"new")
+        tf1.flush(); tf2.flush()
+        sel = selector_from_values(loaders=["fabric"], operating_systems=["android"])
+        v1 = make_variant(tf1.name, selector=sel)
+        v1["required"] = True
+        add_or_update_variant(ws, "platformmod", sel, v1)
+        v2 = make_variant(tf2.name, selector=sel)
+        status = add_or_update_variant(ws, "platformmod", sel, v2, force=True)
+        assert status == "updated"
+        stored = ws["mods"]["platformmod"]["variants"][0]
+        assert stored["localFile"] == tf2.name
+        assert stored["required"] is True
+    os.unlink(tf1.name); os.unlink(tf2.name)
+
+
 def test_no_overwrite_causes_conflict(ws):
     with tempfile.NamedTemporaryFile(suffix=".jar", delete=False) as tf:
         tf.write(b"test")
@@ -103,6 +122,7 @@ def test_build_manifest_with_sha_hashes(ws):
         tf.write(content)
         tf.flush()
         variant = make_variant(tf.name, download_type="hosted")
+        variant["required"] = True
         ws["mods"] = {
             "testmod": {
                 "name": "Test Mod",
@@ -117,6 +137,7 @@ def test_build_manifest_with_sha_hashes(ws):
         assert mod["name"] == "Test Mod"
         assert mod["required"] is True
         variant_built = mod["variants"][0]
+        assert variant_built["required"] is True
         artifact = variant_built["artifact"]
         assert artifact["size"] == len(content)
         # Only assert the expected lengths – the exact hash values depend on the content
@@ -732,6 +753,7 @@ def test_build_delete_variant_does_not_fire_progress(ws):
                     "selector": {},
                     "priority": 0,
                     "action": "delete",
+                    "required": False,
                 }
             ],
         }
@@ -739,3 +761,4 @@ def test_build_delete_variant_does_not_fire_progress(ws):
     manifest = build_manifest(ws, progress_callback=progress)
     assert len(events) == 0
     assert manifest["mods"]["silent"]["variants"][0]["action"] == "delete"
+    assert manifest["mods"]["silent"]["variants"][0]["required"] is False
