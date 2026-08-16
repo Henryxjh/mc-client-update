@@ -20,6 +20,9 @@ import io.github.henryxjh.mcclientupdate.platform.UpdateTarget;
 import io.github.henryxjh.mcclientupdate.update.Hashing;
 import io.github.henryxjh.mcclientupdate.update.Hashing.Hashes;
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -105,6 +108,36 @@ class ModUpdateScannerTest {
         assertEquals(0, result.candidates().size());
         assertEquals(1, result.manifestModCount());
         assertEquals(1, result.installedManagedModCount());
+    }
+
+    @Test
+    void ignoresUnmanagedInstalledModWithVirtualPath() throws Exception {
+        Path modsDir = modsDir();
+        Path managedJar = modsDir.resolve("managed.jar");
+        byte[] data = {1, 2, 3, 4};
+        Hashes hashes = writeAndHash(managedJar, data);
+        Artifact artifact = artifact(
+                "1.0", data.length, Optional.of(hashes.sha256()), Optional.of(hashes.sha512()));
+        Mod managed = manifestMod(
+                "managed",
+                true,
+                List.of(variant(0, new Selector(Optional.empty(), Optional.empty(), Optional.empty()), artifact)));
+
+        Path virtualArchive = tempDir.resolve("virtual.zip");
+        try (FileSystem zip = FileSystems.newFileSystem(
+                URI.create("jar:" + virtualArchive.toUri()), Map.of("create", "true"))) {
+            Path virtualPath = zip.getPath("/shared-internal.jar");
+            ScanResult result = ModUpdateScanner.scan(
+                    makeManifest(Map.of("managed", managed)),
+                    defaultTarget(),
+                    modsDir,
+                    List.of(
+                            installed("managed", "1.0", managedJar),
+                            installed("unmanaged_internal", "1.0", virtualPath)));
+
+            assertEquals(0, result.candidates().size());
+            assertEquals(1, result.installedManagedModCount());
+        }
     }
 
     @Test

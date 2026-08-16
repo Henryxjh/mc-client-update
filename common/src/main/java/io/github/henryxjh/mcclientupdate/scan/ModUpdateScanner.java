@@ -106,25 +106,10 @@ public final class ModUpdateScanner {
             if (mod.action() == ModAction.DELETE) {
                 InstalledMod installed = installedByModId.get(modId);
                 if (installed != null) {
-                    Path normFile = installed.file().toAbsolutePath().normalize();
-                    if (!Files.isRegularFile(normFile)) {
-                        throw new ModScanException(
-                                "Installed mod " + modId + " is not a regular file");
-                    }
-                    Path realFile;
-                    try {
-                        realFile = normFile.toRealPath();
-                    } catch (IOException e) {
-                        throw new ModScanException(
-                                "Cannot resolve real path for installed file of mod " + modId
-                                        + " (" + normFile.getFileName() + ")", e);
-                    }
-                    if (!realFile.startsWith(realModsDir)) {
-                        throw new ModScanException(
-                                "Installed mod " + modId + " is outside the mods directory");
-                    }
+                    Path realFile = PhysicalModFileResolver.resolve(installed.file(), realModsDir, modId);
+                    InstalledMod resolvedInstalled = withFile(installed, realFile);
                     candidates.add(new UpdateCandidate(modId, mod, null,
-                            Optional.of(installed), UpdateCandidate.Reason.DELETE));
+                            Optional.of(resolvedInstalled), UpdateCandidate.Reason.DELETE));
                 }
                 continue;
             }
@@ -155,24 +140,10 @@ public final class ModUpdateScanner {
                     continue;
                 }
                 // Verify installed file safety (same checks as mod‑level DELETE)
-                Path normFileDel = delInst.file().toAbsolutePath().normalize();
-                if (!Files.isRegularFile(normFileDel)) {
-                    throw new ModScanException("Installed mod " + modId + " is not a regular file");
-                }
-                Path realFileDel;
-                try {
-                    realFileDel = normFileDel.toRealPath();
-                } catch (IOException e) {
-                    throw new ModScanException(
-                            "Cannot resolve real path for installed file of mod " + modId
-                                    + " (" + normFileDel.getFileName() + ")", e);
-                }
-                if (!realFileDel.startsWith(realModsDir)) {
-                    throw new ModScanException(
-                            "Installed mod " + modId + " is outside the mods directory");
-                }
+                Path realFileDel = PhysicalModFileResolver.resolve(delInst.file(), realModsDir, modId);
+                InstalledMod resolvedDelInst = withFile(delInst, realFileDel);
                 candidates.add(new UpdateCandidate(modId, mod, selected,
-                        Optional.of(delInst), UpdateCandidate.Reason.DELETE));
+                        Optional.of(resolvedDelInst), UpdateCandidate.Reason.DELETE));
                 continue;
             }
 
@@ -180,22 +151,8 @@ public final class ModUpdateScanner {
 
             if (installed != null) {
                 // verify safety constraints
-                Path normFile = installed.file().toAbsolutePath().normalize();
-                if (!Files.isRegularFile(normFile)) {
-                    throw new ModScanException("Installed mod " + modId + " is not a regular file");
-                }
-                Path realFile;
-                try {
-                    realFile = normFile.toRealPath();
-                } catch (IOException e) {
-                    throw new ModScanException(
-                            "Cannot resolve real path for installed file of mod " + modId
-                                    + " (" + normFile.getFileName() + ")", e);
-                }
-                if (!realFile.startsWith(realModsDir)) {
-                    throw new ModScanException(
-                            "Installed mod " + modId + " is outside the mods directory");
-                }
+                Path realFile = PhysicalModFileResolver.resolve(installed.file(), realModsDir, modId);
+                InstalledMod resolvedInstalled = withFile(installed, realFile);
 
                 // skip if installed version greater than threshold (only for INSTALL action)
                 if (mod.action() == ModAction.INSTALL
@@ -212,12 +169,12 @@ public final class ModUpdateScanner {
                     fileHashes = Hashing.hashes(realFile);
                 } catch (IOException e) {
                     throw new ModScanException(
-                            "Cannot read installed mod " + modId + " (" + normFile.getFileName() + ")", e);
+                            "Cannot read installed mod " + modId + " (" + realFile.getFileName() + ")", e);
                 }
 
                 if (!hashMatches(selected.artifact(), fileHashes)) {
                     UpdateCandidate candidate = new UpdateCandidate(
-                            modId, mod, selected, Optional.of(installed),
+                            modId, mod, selected, Optional.of(resolvedInstalled),
                             UpdateCandidate.Reason.HASH_MISMATCH);
                     validateFileArtifactConsistency(fileArtifactMap, realFile, selected.artifact(), modId);
                     candidates.add(candidate);
@@ -244,6 +201,10 @@ public final class ModUpdateScanner {
         }
 
         return new ScanResult(candidates, manifest.mods().size(), installedManagedCount);
+    }
+
+    private static InstalledMod withFile(InstalledMod installed, Path file) {
+        return new InstalledMod(installed.modId(), installed.version(), file);
     }
 
     private static Map<String, InstalledMod> indexInstalled(List<InstalledMod> mods) {
